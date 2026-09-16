@@ -1110,8 +1110,18 @@
       let simpleInstance = null;
       let wasmReady = false;
       let wasmLoadFailed = false;
+      // wasm trap（如 memory access out of bounds）之后，线性内存里 dlmalloc 的
+      // 元数据已被破坏，同一个实例上继续调用 _malloc/_free 会连锁失败。
+      // 因此一旦踩到 trap 就标记为「已污染」，下次求解前丢弃实例重建。
+      let wasmPoisoned = false;
 
       async function initSimpleSolver() {
+        if (wasmPoisoned) {
+          console.warn('WASM 实例此前发生内存越界，已丢弃并重新创建');
+          simpleInstance = null;
+          wasmReady = false;
+          wasmPoisoned = false;
+        }
         if (wasmReady) return true;
         if (wasmLoadFailed) return false;
 
@@ -1317,12 +1327,20 @@
 
             result = { uv: uvs, time_ms: simpleInstance.ccall('get_last_time_ms', 'number', [], []) };
           } finally {
-            simpleInstance._free(posPtr);
-            simpleInstance._free(facePtr);
+            // trap 之后堆已损坏，_free 很可能再次抛错；必须吞掉，
+            // 否则会覆盖掉真正的错误信息
+            try { simpleInstance._free(posPtr); } catch (e) { wasmPoisoned = true; }
+            try { simpleInstance._free(facePtr); } catch (e) { wasmPoisoned = true; }
           }
         } catch (err) {
           const msg = err && err.message ? err.message : String(err);
-          if (msg.indexOf("memory access out of bounds") >= 0 || msg.indexOf("non manifold") >= 0 || msg.indexOf("nonmanifold") >= 0) {
+          // wasm trap = 已经踩到非法地址，该实例的堆不能再信任
+          if (msg.indexOf("memory access out of bounds") >= 0 || msg.indexOf("unreachable") >= 0) {
+            wasmPoisoned = true;
+            throw new Error("WASM 内存越界（网格拓扑或数值异常）。已丢弃该实例，请重新点击「展开!」重试");
+          }
+          if (msg.indexOf("返回:") >= 0) throw err;   // 求解器错误码(-2/-3/-4/-5)，提示已足够明确
+          if (msg.indexOf("non manifold") >= 0 || msg.indexOf("nonmanifold") >= 0) {
             throw err;
           }
           throw new Error("WASM LSCM 求解失败: " + msg);
@@ -1346,7 +1364,9 @@
 
       function _wasmErrorHint(ret) {
         if (ret === -2) return 'UV 结果退化';
-        if (ret === -3) return '需要带边界的网格';
+        if (ret === -3) return '需要带边界的网格（当前模型可能是闭合网格，请先切缝）';
+        if (ret === -4) return '网格构建失败（存在非流形边或退化面）';
+        if (ret === -5) return '网格拓扑/数值不合法，求解器已放弃以避免越界写';
         return '错误码 ' + ret;
       }
 
@@ -2081,6 +2101,21 @@
           if (!currentMeshData) return;
         }
 
+        // 本页所有算法都基于"带边界的网格"（圆盘拓扑）。闭合网格会让求解器在
+        // 退化系统上工作：历史上会在 Eigen 里产生非法索引，静默越界写坏 WASM 堆，
+        // 直到之后某次 free/malloc 才报 "memory access out of bounds"。
+        // 所以在进入求解器前先做前置判断，给出可读提示。
+        const _methodForCheck = getCurrentMethod();
+        if (isClosedTriangleMesh(currentMeshData)) {
+          if (_methodForCheck === 'lscm' || _methodForCheck === 'bd_lscm') {
+            // LSCM 侧对闭合网格做了退化回退（pin 顶点 0 + 最远顶点），允许尝试但先提示
+            setStatus("提示：模型是闭合网格，LSCM 结果会明显退化（数学上需要圆盘拓扑）", "#ffd38a");
+          } else {
+            setStatus("该算法需要带边界的网格：当前模型是闭合网格，请先切缝或换用带边界的模型", "#ff9d9d");
+            return;
+          }
+        }
+
         // UV 重算/更新前，先清理“其他计算”的覆盖层，避免与新模型/新网格混淆
         clearOtherOverlays();
 
@@ -2229,10 +2264,9 @@
       Promise.all([initSimpleSolver(), initBDLscm()]).then(function () {
         updateStartButtonState();
         loadModelPreview();
-      });
-        if (!simpleOk) {
-          setStatus("WASM 引擎加载失败", "#ff9d9d");
-        }
+      }).catch(function (err) {
+        console.error("WASM 引擎加载失败:", err);
+        setStatus("WASM 引擎加载失败", "#ff9d9d");
       });
       
       // 启动加载第一个模型
