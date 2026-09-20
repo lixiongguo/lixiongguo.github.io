@@ -77,10 +77,24 @@ int main() {
 
     scene.build();
 
-    PathTracingRenderer path_tracing_renderer { camera, scene };
-    Previewer previewer(path_tracing_renderer);
-    if (previewer.preview()) {
-        path_tracing_renderer.render(32, "PT_MIS_TEST.exr");
+    // ---- MIS 开启：标准多重重要性采样路径追踪 ----
+    PathTracingRenderer renderer_mis { camera, scene };
+    renderer_mis.setUseMis(true);
+    {
+        Previewer previewer(renderer_mis);
+        if (previewer.preview()) {
+            renderer_mis.render(32, "PT_MIS_ON.exr");
+        }
+    }
+
+    // ---- MIS 关闭：纯路径追踪（关闭 NEE，仅保留 BSDF 路径命中光源的发光） ----
+    PathTracingRenderer renderer_no_mis { camera, scene };
+    renderer_no_mis.setUseMis(false);
+    {
+        Previewer previewer(renderer_no_mis);
+        if (previewer.preview()) {
+            renderer_no_mis.render(32, "PT_MIS_OFF.exr");
+        }
     }
 
     return 0;
