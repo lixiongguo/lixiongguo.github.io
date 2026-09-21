@@ -6,8 +6,11 @@
 #define DEFINE_RENDERER(Name) \
     class Name##Renderer : public BaseRenderer { \
     public: \
-        Name##Renderer(Camera &camera, const Scene &scene) : BaseRenderer(camera, scene) {} \
-    private: \
+        Name##Renderer(Camera &camera, const Scene &scene) : BaseRenderer(camera, scene), use_mis(true) {} \
+        void setUseMis(bool flag) { use_mis = flag; } \
+        bool getUseMis() const { return use_mis; } \
+    public: \
+        bool use_mis; \
         glm::vec3 renderPixel(const glm::ivec3 &pixel_coord) override; \
     }; \
 
