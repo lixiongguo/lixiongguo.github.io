@@ -16,8 +16,10 @@ const forceSanitized = argv.includes('--sanitized');
 const noRepair = argv.includes('--no-repair');
 const modArg = argv.indexOf('--module');
 const gluePath = modArg >= 0 ? argv[modArg + 1] : path.join(__dirname, 'uv_unwrap_simple_dbg.js');
+const pinsArg = argv.indexOf('--pins');
+const pins = pinsArg >= 0 ? argv[pinsArg + 1].split(',').map(Number) : [0, 0];   // 默认 (0,0) = 非法 → 求解器自动选点
 
-if (!objPath) { console.error('usage: node run_lscm.js <model.obj> [--sanitized] [--no-repair]'); process.exit(2); }
+if (!objPath) { console.error('usage: node run_lscm.js <model.obj> [--sanitized] [--no-repair] [--pins a,b] [--module <glue.js>]'); process.exit(2); }
 
 // ---------- 1. OBJ 解析（只取 v / f） ----------
 function parseObj(text) {
@@ -271,7 +273,7 @@ function stats(positions, faces) {
   try {
     ret = Module.ccall('solve_lscm', 'number',
       ['number','number','number','number','number','number'],
-      [posPtr, posArr.length, facePtr, faceArr.length, 0, 0]);
+      [posPtr, posArr.length, facePtr, faceArr.length, pins[0], pins[1]]);
     const uvSize = Module.ccall('get_uv_result_size', 'number', [], []);
     const uvPtr = Module.ccall('get_uv_result', 'number', [], []);
     const uv = [];
@@ -284,9 +286,16 @@ function stats(positions, faces) {
       if (v < minV) minV = v; if (v > maxV) maxV = v;
     }
     const spread = (maxU - minU) >= 1e-12 || (maxV - minV) >= 1e-12;
-    console.log('[wasm]       solve_lscm=%d  uvSize=%d (expect %d)  非有限值=%d  UV范围 u[%s,%s] v[%s,%s]  有效展开=%s  time=%.1fms',
+    let sumU = 0, sumV = 0;
+    for (let i = 0; i + 1 < uv.length; i += 2) { sumU += uv[i]; sumV += uv[i + 1]; }
+    console.log('[wasm]       solve_lscm=%d  uvSize=%d (expect %d)  非有限值=%d  UV范围 u[%s,%s] v[%s,%s]  校验和 u=%s v=%s  有效展开=%s  time=%.1fms',
                 ret, uvSize, nV * 2, nan, minU.toFixed(4), maxU.toFixed(4), minV.toFixed(4), maxV.toFixed(4),
+                sumU.toFixed(4), sumV.toFixed(4),
                 spread ? 'yes' : 'NO', Module.ccall('get_last_time_ms', 'number', [], []));
+    const pinUv = pins.map(i => (i >= 0 && i < nV)
+      ? ('#' + i + '(' + uv[i * 2].toFixed(4) + ',' + uv[i * 2 + 1].toFixed(4) + ')')
+      : ('#' + i + '(-)')).join(' ');
+    console.log('[pins]       传入 pin=(%d,%d) → pin 顶点 UV: %s', pins[0], pins[1], pinUv);
     try {
       console.log('[mesh]       V=%d F=%d E=%d HE=%d boundaryLoops=%d isolatedVerts=%d',
                   Module.ccall('dbg_vertex_count','number',[],[]), Module.ccall('dbg_face_count','number',[],[]),

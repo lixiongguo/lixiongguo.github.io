@@ -225,7 +225,11 @@ harness 参数：`--sanitized`（强制用清洗后网格）、`--no-repair`（�
    `repairMeshForSolver` 开头会丢弃退化面（重复索引）与越界面，但若没发生边/点分裂，这份清洗结果被丢弃，
    原始面表照样进 wasm。`collectMeshData` 按 `Math.round(x*1e5)` 合并顶点，扫描类模型可能因此产生 `(i,i,k)`；
    本模型未踩到（合并 0 个顶点、非流形边 0），但建议改成无条件 `meshData = repair.meshData`。
-3. `solve_lscm` 的签名把锚点写成 `int /*a1*/, int /*a2*/` 直接忽略，所以「改pin点」按钮对 LSCM 结果无效。
+3. ~~`solve_lscm` 的签名把锚点写成 `int /*a1*/, int /*a2*/` 直接忽略，所以「改pin点」按钮对 LSCM 结果无效。~~
+   **已修复（2026-09-24）**：`Lscm` 增加 `setPins(v0,v1)`，`parameterize()` 在已设置时跳过自动选点，绑定层校验后透传 `a1/a2`。
+   A/B（camelhead，UV 校验和 Σu/Σv）：修复前 `--pins 100,5000` 与自动选点同为 `36.0673/-9.2757`（被忽略）；修复后为 `-1761.7356/100.4757`，
+   自动路径仍为 `36.0673/-9.2757`（无回归）。11 模型回归全部 `solve_lscm=0`。
+   页面无需改动（它本来就传了 `anchors[0], anchors[1]`），但必须硬刷新以取到新 `.wasm`。
 4. 可选优化（不再是修 bug 必需）：`solveLeastSquares` 由"正规方程 + 已 deprecated 的 `SimplicialCholesky`"
    改为 `Eigen::LeastSquaresConjugateGradient`，可去掉 `At`/`At*A`/多份拷贝与 Cholesky fill-in，
    同时避免条件数平方。
