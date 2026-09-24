@@ -138,6 +138,16 @@ A: 检查 `-I` 参数路径是否正确，确保指向包含 `Eigen` 目录的�
 
 A: 可能是 WASM 文件未被 Jekyll 复制到输出目录。检查 `_config.yml` 中的 `keep_files` 配置。
 
-### Q: 内存不足错误
+### Q: 大网格下报 `memory access out of bounds`（页面提示"WASM 内存越界"，曾误称"内存不足"）
 
-A: 增加 `-s TOTAL_MEMORY=512MB` 或更大值。
+A: 这**不是**堆内存不足，而是 Eigen 稀疏 Cholesky/LLT/LDLT 的工作区（`Index tags[size]`、`pattern[size]`、`Scalar y[size]`）被 `alloca` 到 wasm 栈上导致的**栈溢出**：
+Eigen 的阈值 `EIGEN_STACK_ALLOCATION_LIMIT` 默认 128KB（按桌面栈设计），而 Emscripten 默认栈只有 64KB，
+`v = 2(V-2) > 16384`（约 8.2K 顶点以上）就会踩到。增大 `-s TOTAL_MEMORY` 对此**无效**。
+
+修法：
+- `-DEIGEN_STACK_ALLOCATION_LIMIT=0`（阈值置 0 ⇒ 这些缓冲区一律走 `aligned_malloc`，必须）
+- `-s STACK_SIZE=1048576`（兜底，建议）
+- 定位手段：`-sASSERTIONS=2 -sSAFE_HEAP=1 -sSTACK_OVERFLOW_CHECK=2 -g` 重建，会直接打印 `stack overflow (Attempt to set SP to ...)` 与调用链
+
+详见「参数化算法 — 代码实现汇总」的 WebAssembly 编译章节。
+（只有真的堆耗尽、报 `Aborted(OOM)` / `Cannot enlarge memory arrays` 时，才轮到内存相关参数。）
