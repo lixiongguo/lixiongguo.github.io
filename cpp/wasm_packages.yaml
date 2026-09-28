@@ -93,6 +93,8 @@ packages:
       - get_arap_iters
       - get_arap_iters_size
       - get_arap_iters_stride
+      - get_arap_init_uv
+      - get_arap_init_uv_size
       - get_last_time_ms
       - dispose
     sources:

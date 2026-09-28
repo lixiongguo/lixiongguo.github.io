@@ -229,16 +229,75 @@
       color: #7e8db5;
       font-size: 12px;
     }
-    /* ===== ARAP 迭代收敛面板（仅切到 ARAP 时占用第三列） ===== */
+    /* ===== ARAP 迭代收敛弹窗（不占用页面布局） ===== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(4, 8, 16, 0.72);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+    }
+    .modal-overlay.visible {
+      display: flex;
+    }
+    .modal-card {
+      width: min(900px, 92vw);
+      height: min(640px, 88vh);
+      display: flex;
+      flex-direction: column;
+      background: #0b1220;
+      border: 1px solid rgba(106, 132, 255, 0.30);
+      border-radius: 14px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(106, 132, 255, 0.16);
+      color: #c6d1f4;
+      font-size: 14px;
+    }
+    .modal-header .modal-sub {
+      color: #8292bd;
+      font-size: 12px;
+    }
+    .modal-close {
+      margin-left: auto;
+      padding: 6px 14px;
+      font-size: 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid rgba(106, 132, 255, 0.3);
+      background: #111b31;
+      color: #c6d1f4;
+      transition: background 0.2s ease;
+    }
+    .modal-close:hover {
+      background: #1a2a4a;
+      border-color: rgba(106, 132, 255, 0.55);
+    }
+    .modal-body {
+      flex: 1;
+      min-height: 0;
+      /* 用 margin 而非 padding：drawArapChart 按 clientWidth/Height 设置 canvas
+         分辨率，带 padding 会让位图尺寸与显示尺寸不一致 */
+      margin: 12px 14px 0 14px;
+    }
+    /* ===== ARAP 双 UV 对比：三列布局（模型 | Tutte 初始 UV | ARAP 优化 UV） ===== */
     .main.arap-mode {
       grid-template-columns: 1fr 1fr 1.06fr;
     }
-    #arap-chart-panel {
+    #uv-init-panel {
       display: none;
     }
-    /* 注意：这里必须用 class 驱动显示，不能靠 style.display = ''（那会回落到上面的
-       display:none 规则，面板永远不出现） */
-    .main.arap-mode #arap-chart-panel {
+    /* 必须用 class 驱动显示：style.display = '' 会回落到上面的 display:none */
+    .main.arap-mode #uv-init-panel {
       display: flex;
     }
     .chart-legend {
@@ -279,6 +338,9 @@
       .main {
         grid-template-columns: 1fr;
         grid-template-rows: 1fr 1fr;
+      }
+      .main.arap-mode {
+        grid-template-rows: 1fr 1fr 1fr;
       }
     }
       #reload-btn {
@@ -420,6 +482,20 @@
       #model-canvas.pin-pick-mode {
         cursor: crosshair;
       }
+      #arap-chart-btn {
+        padding: 5px 12px;
+        font-size: 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        border: 1px solid rgba(106, 132, 255, 0.3);
+        background: #111b31;
+        color: #c6d1f4;
+        transition: background 0.2s ease;
+      }
+      #arap-chart-btn:hover {
+        background: #1a2a4a;
+        border-color: rgba(106, 132, 255, 0.55);
+      }
   </style>
 </head>
 <body>
@@ -446,10 +522,9 @@
         <fieldset id="method-radios" style="border:1px solid rgba(106,132,255,0.22);border-radius:10px;padding:8px 12px;margin:0;">
           <legend style="color:#8a9dd4;font-size:11px;padding:0 6px;">展开计算</legend>
           <div style="display:flex;flex-wrap:wrap;gap:6px 14px;">
-            <label style="color:#d8def7;font-size:13px;cursor:pointer;white-space:nowrap"><input type="radio" name="method" value="tutte" checked> Tutte</label>
-            <label style="color:#d8def7;font-size:13px;cursor:pointer;white-space:nowrap"><input type="radio" name="method" value="lscm"> LSCM</label>
+            <label style="color:#d8def7;font-size:13px;cursor:pointer;white-space:nowrap"><input type="radio" name="method" value="lscm" checked> LSCM</label>
             <label style="color:#d8def7;font-size:13px;cursor:pointer;white-space:nowrap" title="Spectral Conformal Parameterization (Mullen et al.)"><input type="radio" name="method" value="scp"> SCP</label>
-            <label style="color:#d8def7;font-size:13px;cursor:pointer;white-space:nowrap" title="As-Rigid-As-Possible，Tutte 圆边界初始化"><input type="radio" name="method" value="arap"> ARAP</label>
+            <label style="color:#d8def7;font-size:13px;cursor:pointer;white-space:nowrap" title="As-Rigid-As-Possible；Tutte（可配置边界/权重）初始化 + local/global 迭代"><input type="radio" name="method" value="arap"> ARAP</label>
             <label style="color:#d8def7;font-size:13px;cursor:pointer;white-space:nowrap" title="Angle Based Flattening"><input type="radio" name="method" value="abf"> ABF</label>
             <label style="color:#d8def7;font-size:13px;cursor:pointer;white-space:nowrap" title="LSCM + 有界失真优化"><input type="radio" name="method" value="bd_lscm"> BD-LSCM</label>
           </div>
@@ -464,30 +539,34 @@
             <span id="param-lscm-pin" style="display:none;font-size:12px;color:#c6d1f4;">
               <button id="change-pin-btn" type="button">改pin点</button>
             </span>
-            <!-- Tutte 边界选择 -->
-            <span id="param-tutte-boundary" style="display:none;font-size:12px;color:#c6d1f4;">
-              边界:
-              <label style="cursor:pointer;margin:0 4px;" title="映射到圆形边界"><input type="radio" name="tutte-boundary" value="circle" checked> 圆</label>
-              <label style="cursor:pointer;margin:0 4px;" title="映射到正方形边界"><input type="radio" name="tutte-boundary" value="square"> 方</label>
-              <label style="cursor:pointer;margin:0 4px;" title="自由边界：仅 pin 2 个顶点，边界形状由能量决定"><input type="radio" name="tutte-boundary" value="free"> 自由</label>
-            </span>
-            <!-- Tutte Laplace 权重（uniform 图 Laplace / cot-Laplace） -->
-            <span id="param-tutte-weight" style="display:none;font-size:12px;color:#c6d1f4;">
-              权重:
-              <label style="cursor:pointer;margin:0 4px;" title="均匀权重：Δf(v_i)=1/|N_i| Σ(f_j−f_i)，见 Tutte 参数化"><input type="radio" name="tutte-weight" value="uniform" checked> uniform</label>
-              <label style="cursor:pointer;margin:0 4px;" title="余切权重：cot-Laplace 调和映射"><input type="radio" name="tutte-weight" value="cot"> cot-Laplace</label>
-            </span>
             <!-- ABF 子类型选择 -->
             <span id="param-abf-type" style="display:none;font-size:12px;color:#c6d1f4;">
               ABF方法:
               <label style="cursor:pointer;margin:0 4px;" title="Angle Based Flattening++"><input type="radio" name="abf-type" value="abfpp" checked> ABF++</label>
               <label style="cursor:pointer;margin:0 4px;" title="Linearized Angle Based Flattening"><input type="radio" name="abf-type" value="linabf"> linABF</label>
             </span>
+            <!-- ARAP 的 Tutte 初始化：边界形状（Tutte 不再是独立算法） -->
+            <span id="param-arap-init-boundary" style="display:none;font-size:12px;color:#c6d1f4;">
+              Tutte边界:
+              <label style="cursor:pointer;margin:0 4px;" title="映射到圆形边界"><input type="radio" name="arap-init-boundary" value="circle" checked> 圆</label>
+              <label style="cursor:pointer;margin:0 4px;" title="映射到正方形边界"><input type="radio" name="arap-init-boundary" value="square"> 方</label>
+              <label style="cursor:pointer;margin:0 4px;" title="自由边界：仅 pin 2 个顶点，边界形状由能量决定"><input type="radio" name="arap-init-boundary" value="free"> 自由</label>
+            </span>
+            <!-- ARAP 的 Tutte 初始化：Laplace 权重 -->
+            <span id="param-arap-init-weight" style="display:none;font-size:12px;color:#c6d1f4;">
+              Tutte权重:
+              <label style="cursor:pointer;margin:0 4px;" title="均匀权重：Δf(v_i)=1/|N_i| Σ(f_j−f_i)"><input type="radio" name="arap-init-weight" value="uniform"> uniform</label>
+              <label style="cursor:pointer;margin:0 4px;" title="余切权重：cot-Laplace 调和映射"><input type="radio" name="arap-init-weight" value="cot" checked> cot-Laplace</label>
+            </span>
             <!-- ARAP 迭代次数 -->
             <span id="param-arap-iters" style="display:none;font-size:12px;color:#c6d1f4;">
               迭代:
               <input type="range" id="arap-iters-slider" min="0" max="20" value="5" style="width:80px;vertical-align:middle;margin:0 4px;">
               <span id="arap-iters-val" style="min-width:24px;display:inline-block;">5</span>
+            </span>
+            <!-- ARAP 收敛曲线弹窗入口 -->
+            <span id="param-arap-chart" style="display:none;font-size:12px;color:#c6d1f4;">
+              <button id="arap-chart-btn" type="button">收敛曲线</button>
             </span>
           </div>
         </fieldset>
@@ -518,6 +597,17 @@
         <div class="footer-note">左侧显示原始三角网格与自动选择的约束点。</div>
       </section>
 
+      <section class="panel" id="uv-init-panel">
+        <div class="panel-header">
+          <span>Tutte 初始 UV</span>
+          <span>ARAP 迭代起点</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="uv-init-canvas"></canvas>
+        </div>
+        <div class="footer-note">与左侧同一坐标系：边界完全重合，差异即 ARAP 的优化量。</div>
+      </section>
+
       <section class="panel">
         <div class="panel-header">
           <span id="uv-panel-label">UV 网格</span>
@@ -530,21 +620,26 @@
         <div class="footer-note">右侧展示展开后的线框 UV 结果。</div>
       </section>
 
-      <section class="panel" id="arap-chart-panel">
-        <div class="panel-header">
-          <span>ARAP 迭代收敛</span>
-          <span>柱 = 该次迭代的能量收益</span>
-        </div>
-        <div class="canvas-wrap">
-          <canvas id="arap-chart"></canvas>
-        </div>
-        <div class="chart-legend">
-          <span><i style="background:#89f0b6"></i>该次迭代能量下降</span>
-          <span><i style="background:#ffd700"></i>剩余 ARAP 能量</span>
-          <span><i style="background:#6fc3ff"></i>面积畸变（已去整体缩放）</span>
-        </div>
-        <div class="chart-summary" id="arap-chart-summary">切换到 ARAP 后点击「展开」，这里会显示每次迭代的优化收益。</div>
-      </section>
+    </div>
+  </div>
+
+  <!-- ARAP 迭代收敛弹窗（不占用页面布局） -->
+  <div class="modal-overlay" id="arap-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span class="modal-title">ARAP 迭代收敛</span>
+        <span class="modal-sub">柱 = 该次迭代的能量收益</span>
+        <button class="modal-close" id="arap-modal-close" type="button">关闭</button>
+      </div>
+      <div class="modal-body">
+        <canvas id="arap-chart"></canvas>
+      </div>
+      <div class="chart-legend">
+        <span><i style="background:#89f0b6"></i>该次迭代能量下降</span>
+        <span><i style="background:#ffd700"></i>剩余 ARAP 能量</span>
+        <span><i style="background:#6fc3ff"></i>面积畸变（已去整体缩放）</span>
+      </div>
+      <div class="chart-summary" id="arap-chart-summary">切换到 ARAP 后点击「展开」，这里会显示每次迭代的优化收益。</div>
     </div>
   </div>
 
@@ -609,6 +704,7 @@
 
       const modelCanvas = document.getElementById("model-canvas");
       const uvCanvas = document.getElementById("uv-canvas");
+      const uvInitCanvas = document.getElementById("uv-init-canvas");
       const modelSelect = document.getElementById("model-select");
       const reloadBtn = document.getElementById("reload-btn");
       const clearBtn = document.getElementById("clear-btn");
@@ -619,18 +715,24 @@
 
       const modelRenderer = new THREE.WebGLRenderer({ canvas: modelCanvas, antialias: true, alpha: true });
       const uvRenderer = new THREE.WebGLRenderer({ canvas: uvCanvas, antialias: true, alpha: true });
+      const uvInitRenderer = new THREE.WebGLRenderer({ canvas: uvInitCanvas, antialias: true, alpha: true });
       modelRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       uvRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      uvInitRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
       const modelScene = new THREE.Scene();
       const uvScene = new THREE.Scene();
+      const uvInitScene = new THREE.Scene();
       modelScene.background = new THREE.Color(0x08101d);
       uvScene.background = new THREE.Color(0x091120);
+      uvInitScene.background = new THREE.Color(0x091120);
 
       const modelCamera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
       modelCamera.position.set(1.8, 1.5, 1.8);
       const uvCamera = new THREE.OrthographicCamera(-1.15, 1.15, 1.15, -1.15, 0.1, 10);
       uvCamera.position.set(0, 0, 2);
+      const uvInitCamera = new THREE.OrthographicCamera(-1.15, 1.15, 1.15, -1.15, 0.1, 10);
+      uvInitCamera.position.set(0, 0, 2);
 
       const controls = new THREE.OrbitControls(modelCamera, modelCanvas);
       controls.enableDamping = true;
@@ -646,6 +748,8 @@
       let currentPins = null;
       let currentUvLines = null;
       let currentUvPins = null;
+      let currentUvInitLines = null;    // ARAP 的 Tutte 初始 UV 线框
+      let currentUvInit = null;         // ARAP 的 Tutte 初始 UV 数据（扁平索引 -> [u,v]）
       let currentHomologyLines = null;
       let busy = false;
       let currentMeshData = null;
@@ -752,6 +856,19 @@
         modelRenderer.setSize(modelRect.width, modelRect.height, false);
         uvRenderer.setSize(uvRect.width, uvRect.height, false);
 
+        // 第三列（Tutte 初始 UV）只在 ARAP 下可见：隐藏时尺寸为 0，跳过以免把画布设成 0×0
+        const uvInitRect = uvInitCanvas.parentElement.getBoundingClientRect();
+        if (uvInitRect.width > 0 && uvInitRect.height > 0) {
+          uvInitRenderer.setSize(uvInitRect.width, uvInitRect.height, false);
+          const initAspect = uvInitRect.width / Math.max(uvInitRect.height, 1);
+          const initScale = 1.15;
+          uvInitCamera.left = -initScale * initAspect;
+          uvInitCamera.right = initScale * initAspect;
+          uvInitCamera.top = initScale;
+          uvInitCamera.bottom = -initScale;
+          uvInitCamera.updateProjectionMatrix();
+        }
+
         modelCamera.aspect = modelRect.width / Math.max(modelRect.height, 1);
         modelCamera.updateProjectionMatrix();
 
@@ -763,8 +880,8 @@
         uvCamera.bottom = -scale;
         uvCamera.updateProjectionMatrix();
 
-        // 收敛图是按 canvas 尺寸绘制的，窗口尺寸变化后需要重绘
-        drawArapChart(lastArapHistory);
+        // 收敛图是按 canvas 尺寸绘制的，窗口尺寸变化后需要重绘（弹窗打开时才需要）
+        if (isArapModalOpen()) drawArapChart(lastArapHistory);
       }
 
       function normalizeObject(root) {
@@ -1241,44 +1358,68 @@
         return slider ? parseInt(slider.value, 10) : 30;
       }
 
-      /** 获取 Tutte 边界类型 */
-      function getTutteBoundary() {
-        const r = document.querySelector('input[name="tutte-boundary"]:checked');
+      /** ARAP 的 Tutte 初始化边界：circle | square | free */
+      function getArapInitBoundary() {
+        const r = document.querySelector('input[name="arap-init-boundary"]:checked');
         return r ? r.value : 'circle';
       }
 
-      function getTutteBoundaryLabel() {
-        const b = getTutteBoundary();
+      function getArapInitBoundaryLabel() {
+        const b = getArapInitBoundary();
         if (b === 'square') return '方';
         if (b === 'free') return '自由';
         return '圆';
       }
 
-      /** 获取 Tutte Laplace 权重类型：uniform | cot */
-      function getTutteWeight() {
-        const r = document.querySelector('input[name="tutte-weight"]:checked');
-        return r ? r.value : 'uniform';
+      /** ARAP 的 Tutte 初始化 Laplace 权重：uniform | cot */
+      function getArapInitWeight() {
+        const r = document.querySelector('input[name="arap-init-weight"]:checked');
+        return r ? r.value : 'cot';
       }
 
-      function getTutteWeightLabel() {
-        return getTutteWeight() === 'cot' ? 'cot-Laplace' : 'uniform';
+      function getArapInitWeightLabel() {
+        return getArapInitWeight() === 'uniform' ? 'uniform' : 'cot-Laplace';
       }
 
-      /** 算法切换 + Tutte边界切换 → 统一更新参数面板 */
+      /** Tutte 边界枚举 -> wasm 参数：0=CIRCLE 1=SQUARE 2=FREE */
+      function getArapInitBoundaryCode() {
+        const b = getArapInitBoundary();
+        if (b === 'square') return 1;
+        if (b === 'free') return 2;
+        return 0;
+      }
+
+      /** Tutte 权重枚举 -> wasm 参数：0=COTAN 1=UNIFORM */
+      function getArapInitWeightCode() {
+        return getArapInitWeight() === 'uniform' ? 1 : 0;
+      }
+
+      /** 算法切换 + ARAP 初始化参数切换 → 统一更新参数面板 */
       function onParamChange() {
         const m = getCurrentMethod();
-        const hasParams = (m === 'tutte' || m === 'lscm' || m === 'bd_lscm' || m === 'arap' || m === 'abf');
-        document.getElementById('param-none').style.display = hasParams ? 'none' : '';
-        document.getElementById('param-tutte-boundary').style.display = (m === 'tutte') ? '' : 'none';
-        document.getElementById('param-tutte-weight').style.display = (m === 'tutte') ? '' : 'none';
-        document.getElementById('param-lscm-pin').style.display = (m === 'lscm' || m === 'bd_lscm') ? '' : 'none';
-        document.getElementById('param-arap-iters').style.display = (m === 'arap') ? '' : 'none';
-        document.getElementById('param-abf-type').style.display = (m === 'abf') ? '' : 'none';
-        // 收敛图只在 ARAP 下占用第三列（显示/隐藏完全由 .arap-mode 这个 class 决定）
         const isArap = (m === 'arap');
+        const hasParams = (m === 'lscm' || m === 'bd_lscm' || isArap || m === 'abf');
+        document.getElementById('param-none').style.display = hasParams ? 'none' : '';
+        // Tutte 已并入 ARAP，其边界/权重即 ARAP 的初始化参数
+        document.getElementById('param-arap-init-boundary').style.display = isArap ? '' : 'none';
+        document.getElementById('param-arap-init-weight').style.display = isArap ? '' : 'none';
+        document.getElementById('param-lscm-pin').style.display = (m === 'lscm' || m === 'bd_lscm') ? '' : 'none';
+        document.getElementById('param-arap-iters').style.display = isArap ? '' : 'none';
+        document.getElementById('param-abf-type').style.display = (m === 'abf') ? '' : 'none';
+        // 收敛曲线入口只在 ARAP 下出现；切走后自动关闭弹窗
+        const arapChartEntry = document.getElementById('param-arap-chart');
+        if (arapChartEntry) arapChartEntry.style.display = isArap ? '' : 'none';
+        if (!isArap) {
+          closeArapModal();
+          // 离开 ARAP：清掉「Tutte 初始 UV」视图
+          currentUvInit = null;
+          clearGroup(uvInitScene, currentUvInitLines);
+          currentUvInitLines = null;
+        }
+        // ARAP 下启用第三列（Tutte 初始 UV）
         const mainEl = document.querySelector('.main');
         if (mainEl) mainEl.classList.toggle('arap-mode', isArap);
-        if (isArap) requestAnimationFrame(function () { drawArapChart(lastArapHistory); });
+        if (isArap) requestAnimationFrame(function () { resize(); });
         if (m !== 'lscm' && m !== 'bd_lscm') { currentCustomAnchors = null; resetPinPickMode(); }
         if (currentMeshData) {
           updateModelPinPoints(currentCustomAnchors || chooseAnchorPair(currentMeshData.positions));
@@ -1316,7 +1457,7 @@
       document.querySelectorAll('input[name="method"]').forEach(function(radio) {
         radio.addEventListener('change', onParamChange);
       });
-      document.querySelectorAll('input[name="tutte-boundary"], input[name="tutte-weight"], input[name="abf-type"]').forEach(function(radio) {
+      document.querySelectorAll('input[name="arap-init-boundary"], input[name="arap-init-weight"], input[name="abf-type"]').forEach(function(radio) {
         radio.addEventListener('change', onParamChange);
       });
       const arapSlider = document.getElementById('arap-iters-slider');
@@ -1542,70 +1683,6 @@
         return solveSimpleWasmMethod(meshData, "solve_abfpp", "abfpp", onProgress);
       }
 
-      async function _solveTutteWasmAsync(meshData, onProgress, wasmFuncName, methodTag) {
-        const weightVal = (getTutteWeight() === 'uniform') ? 1 : 0;
-        if (!wasmReady) { const ok = await initSimpleSolver(); if (!ok) throw new Error("Tutte WASM 初始化失败"); }
-
-        const flatPositions = new Float64Array(meshData.positions.length * 3);
-        for (let i = 0; i < meshData.positions.length; i++) {
-          flatPositions[i*3]=meshData.positions[i][0]; flatPositions[i*3+1]=meshData.positions[i][1]; flatPositions[i*3+2]=meshData.positions[i][2];
-        }
-        const flatFaces = new Int32Array(meshData.faces.length * 3);
-        for (let i = 0; i < meshData.faces.length; i++) {
-          flatFaces[i*3]=meshData.faces[i][0]; flatFaces[i*3+1]=meshData.faces[i][1]; flatFaces[i*3+2]=meshData.faces[i][2];
-        }
-        if (onProgress) onProgress(0, 1);
-
-        const posPtr = simpleInstance._malloc(flatPositions.length * 8);
-        for (let i = 0; i < flatPositions.length; i++) simpleInstance.setValue(posPtr+i*8, flatPositions[i], 'double');
-        const facePtr = simpleInstance._malloc(flatFaces.length * 4);
-        for (let i = 0; i < flatFaces.length; i++) simpleInstance.setValue(facePtr+i*4, flatFaces[i], 'i32');
-
-        try {
-          const ret = simpleInstance.ccall(wasmFuncName, 'number',
-            ['number','number','number','number','number'],[posPtr,flatPositions.length,facePtr,flatFaces.length,weightVal]);
-          if (ret !== 0) throw new Error(wasmFuncName + ' 返回: ' + _wasmErrorHint(ret));
-          const uvSize = simpleInstance.ccall('get_uv_result_size','number',[],[]);
-          const uvPtr = simpleInstance.ccall('get_uv_result','number',[],[]);
-          const uvs = []; for (let i=0;i<uvSize;i++) uvs.push(simpleInstance.getValue(uvPtr+i*8,'double'));
-          simpleInstance.ccall('dispose','void',[],[]);
-          const timeMs = simpleInstance.ccall('get_last_time_ms','number',[],[]);
-          if (onProgress) onProgress(1,1);
-          const n = meshData.positions.length;
-          const uv = []; for (let i=0;i<n;i++) uv.push([uvs[i*2],uvs[i*2+1]]);
-          const boundaryType = getTutteBoundary();
-          const boundaryText = boundaryType === 'square' ? '方形边界' : (boundaryType === 'free' ? '自由边界' : '圆形边界');
-          return {
-            uv,
-            anchors: chooseAnchorPair(meshData.positions),
-            flippedFaceCount: countFlippedFaces(uv, meshData.faces),
-            timeMs,
-            method: methodTag,
-            boundary: boundaryText,
-            weight: getTutteWeightLabel()
-          };
-        } finally { simpleInstance._free(posPtr); simpleInstance._free(facePtr); }
-      }
-
-      async function solveTutteCircleAsync(meshData, onProgress) {
-        return _solveTutteWasmAsync(meshData, onProgress, 'solve_tutte_circle', 'tutte_circle');
-      }
-
-      async function solveTutteSquareAsync(meshData, onProgress) {
-        return _solveTutteWasmAsync(meshData, onProgress, 'solve_tutte_square', 'tutte_square');
-      }
-
-      async function solveTutteFreeAsync(meshData, onProgress) {
-        return _solveTutteWasmAsync(meshData, onProgress, 'solve_tutte_free', 'tutte_free');
-      }
-
-      async function solveTutteAsync(meshData, onProgress) {
-        const boundaryType = getTutteBoundary();
-        if (boundaryType === 'square') return solveTutteSquareAsync(meshData, onProgress);
-        if (boundaryType === 'free') return solveTutteFreeAsync(meshData, onProgress);
-        return solveTutteCircleAsync(meshData, onProgress);
-      }
-
       function countFlippedFaces(uv, faces) {
         let count = 0;
         const eps = 1e-12;
@@ -1630,6 +1707,34 @@
           uv[i][1] = (uv[i][1] - minV) * s;
         }
         return uv;
+      }
+
+      /**
+       * 用**同一个**仿射变换把两组 UV 归一化到 0..1（取两者包围盒的并集）。
+       * ARAP 的「Tutte 初始 UV」与「优化后 UV」边界完全重合，只有共用变换才能
+       * 在并排的两个视图里直接叠合比较；各自独立归一化会破坏这种可比性。
+       */
+      function _normalizeUvPair(uvA, uvB) {
+        let minU = Infinity, minV = Infinity, maxU = -Infinity, maxV = -Infinity;
+        const scan = function (uv) {
+          for (let i = 0; i < uv.length; i++) {
+            const u = uv[i][0], v = uv[i][1];
+            if (u < minU) minU = u; if (u > maxU) maxU = u;
+            if (v < minV) minV = v; if (v > maxV) maxV = v;
+          }
+        };
+        scan(uvA);
+        if (uvB) scan(uvB);
+        const du = maxU - minU || 1, dv = maxV - minV || 1, s = 1 / Math.max(du, dv);
+        const apply = function (uv) {
+          for (let i = 0; i < uv.length; i++) {
+            uv[i][0] = (uv[i][0] - minU) * s;
+            uv[i][1] = (uv[i][1] - minV) * s;
+          }
+        };
+        apply(uvA);
+        if (uvB) apply(uvB);
+        return uvA;
       }
 
       // ==================== ARAP 迭代收敛可视化 ====================
@@ -1796,7 +1901,27 @@
         if (summaryEl) summaryEl.innerHTML = parts.join(" · ");
       }
 
-      async function solveSimpleWasmMethod(meshData, wasmFuncName, methodName, onProgress, optScheme, coneVertices) {
+      // ---- ARAP 收敛曲线弹窗控制 ----
+      function isArapModalOpen() {
+        const el = document.getElementById("arap-modal");
+        return !!(el && el.classList.contains("visible"));
+      }
+
+      function openArapModal() {
+        if (getCurrentMethod() !== "arap") return;
+        const el = document.getElementById("arap-modal");
+        if (!el) return;
+        el.classList.add("visible");
+        // 弹窗隐藏时 canvas 尺寸为 0，必须在显示后按实际尺寸重绘
+        requestAnimationFrame(function () { drawArapChart(lastArapHistory); });
+      }
+
+      function closeArapModal() {
+        const el = document.getElementById("arap-modal");
+        if (el) el.classList.remove("visible");
+      }
+
+      async function solveSimpleWasmMethod(meshData, wasmFuncName, methodName, onProgress, optScheme, coneVertices, extraArgs) {
         const vertices = meshData.positions, faces = meshData.faces;
         if (!wasmReady) {
           const loaded = await initSimpleSolver();
@@ -1840,7 +1965,12 @@
 
         try {
           let ret;
-          if (hasCones) {
+          if (extraArgs && extraArgs.length > 0) {
+            // 带自定义尾部参数的变体（ARAP：maxIter, 初始化边界, 初始化权重）
+            const sig = ["number", "number", "number", "number"].concat(extraArgs.map(function () { return "number"; }));
+            ret = simpleInstance.ccall(wasmFuncName, "number", sig,
+              [posPtr, flatPositions.length, facePtr, flatFaces.length].concat(extraArgs));
+          } else if (hasCones) {
             // Cone-enabled methods: 9 params (pos, posLen, faces, faceLen, optScheme, coneIdx, coneIdxLen, coneAngles, coneAnglesLen)
             ret = simpleInstance.ccall(wasmFuncName, "number",
               ["number", "number", "number", "number", "number",
@@ -1885,6 +2015,19 @@
             }
           }
 
+          // ARAP：Tutte 初始化 UV（供「初始 / 优化后」双视图对比）。必须在 dispose 前读取。
+          let initUv = null;
+          if (typeof simpleInstance._get_arap_init_uv_size === "function") {
+            const initSize = simpleInstance.ccall("get_arap_init_uv_size", "number", [], []);
+            if (initSize > 0) {
+              const initPtr = simpleInstance.ccall("get_arap_init_uv", "number", [], []);
+              const initFlat = [];
+              for (let i = 0; i < initSize; i++) initFlat.push(simpleInstance.getValue(initPtr + i * 8, "double"));
+              initUv = [];
+              for (let i = 0; i + 1 < initSize; i += 2) initUv.push([initFlat[i], initFlat[i + 1]]);
+            }
+          }
+
           simpleInstance.ccall("dispose", "void", [], []);
           if (onProgress) onProgress(1, 1);
 
@@ -1893,6 +2036,7 @@
           for (let i = 0; i < n; i++) uv.push([uvs[i * 2], uvs[i * 2 + 1]]);
           return {
             uv: uv,
+            initUv: initUv,
             anchors: chooseAnchorPair(vertices),
             flippedFaceCount: countFlippedFaces(uv, faces),
             timeMs: timeMs,
@@ -1911,9 +2055,13 @@
         return solveSimpleWasmMethod(meshData, "solve_scp", "scp", onProgress);
       }
 
-      /** ARAP — Tutte 圆边界初始化，C++ local-global 迭代 */
-      async function solveARAPAsync(meshData, maxIter, onProgress) {
-        return solveSimpleWasmMethod(meshData, "solve_arap", "arap", onProgress, maxIter || 30);
+      /**
+       * ARAP — Tutte 初始化（边界形状/权重可选）+ C++ local-global 迭代。
+       * Tutte 只作为 ARAP 的前置步骤存在，不再是独立算法。
+       */
+      async function solveARAPAsync(meshData, maxIter, boundaryCode, weightCode, onProgress) {
+        return solveSimpleWasmMethod(meshData, "solve_arap", "arap", onProgress, undefined, undefined,
+          [maxIter || 30, boundaryCode, weightCode]);
       }
 
       function buildModelGroup(root, anchors, positions, showPins) {
@@ -2413,7 +2561,6 @@
       }
 
       function rebuildUvGrid() {
-        const grid = new THREE.Group();
         const gridMaterial = new THREE.LineBasicMaterial({ color: 0x1a2947, transparent: true, opacity: 0.85 });
         const coords = [];
         for (let i = -10; i <= 10; i++) {
@@ -2421,10 +2568,19 @@
           coords.push(-1, t, 0, 1, t, 0);
           coords.push(t, -1, 0, t, 1, 0);
         }
-        const geom = new THREE.BufferGeometry();
-        geom.setAttribute("position", new THREE.Float32BufferAttribute(coords, 3));
-        grid.add(new THREE.LineSegments(geom, gridMaterial));
-        uvScene.add(grid);
+        const makeGrid = function () {
+          const geom = new THREE.BufferGeometry();
+          geom.setAttribute("position", new THREE.Float32BufferAttribute(coords, 3));
+          return new THREE.LineSegments(geom, gridMaterial);
+        };
+        uvScene.add(makeGrid());
+        uvInitScene.add(makeGrid());   // Tutte 初始 UV 视图用同样的网格底
+      }
+
+      /** 当前是否处于 ARAP 双 UV 模式（第三列可见） */
+      function isArapUvMode() {
+        const mainEl = document.querySelector('.main');
+        return !!(mainEl && mainEl.classList.contains('arap-mode'));
       }
 
       function clearGroup(scene, objectRef) {
@@ -2469,6 +2625,9 @@
           clearGroup(modelScene, currentModelGroup);
           clearGroup(uvScene, currentUvLines);
           clearGroup(uvScene, currentUvPins);
+          clearGroup(uvInitScene, currentUvInitLines);
+          currentUvInitLines = null;
+          currentUvInit = null;
           clearHomologyOverlay();
           clearOtherOverlays();
           clearTexturedMesh();
@@ -2564,11 +2723,11 @@
         let methodLabel;
         if (method === 'lscm') methodLabel = 'LSCM';
         else if (method === 'bd_lscm') methodLabel = 'BD-LSCM (有界失真)';
-        else if (method === 'tutte') {
-          methodLabel = 'Tutte (' + getTutteWeightLabel() + ', ' + getTutteBoundaryLabel() + ')';
-        }
         else if (method === 'scp') methodLabel = 'SCP (谱共形)';
-        else if (method === 'arap') methodLabel = 'ARAP (' + getARAPIterations() + ' iters, Tutte圆边界初始化)';
+        else if (method === 'arap') {
+          methodLabel = 'ARAP (' + getARAPIterations() + ' iters, Tutte初始化 ' +
+                        getArapInitBoundaryLabel() + '/' + getArapInitWeightLabel() + ')';
+        }
         else if (method === 'abf') methodLabel = 'ABF (' + (getABFType() === 'abfpp' ? 'ABF++' : 'linABF') + ')';
         else methodLabel = 'LSCM';
 
@@ -2585,13 +2744,12 @@
             });
           } else if (method === 'bd_lscm') {
             unwrapResult = await solveBDLscmAsync(currentMeshData, function(/* progress, total */) {});
-          } else if (method === 'tutte') {
-            unwrapResult = await solveTutteAsync(currentMeshData, function() {});
           } else if (method === 'scp') {
             unwrapResult = await solveSCPAsync(currentMeshData, function(/* p, t */) {
             });
           } else if (method === 'arap') {
-            unwrapResult = await solveARAPAsync(currentMeshData, getARAPIterations(), function(/* p, t */) {
+            unwrapResult = await solveARAPAsync(currentMeshData, getARAPIterations(),
+              getArapInitBoundaryCode(), getArapInitWeightCode(), function(/* p, t */) {
             });
             unwrapResult.maxIter = getARAPIterations();
           } else if (method === 'abf') {
@@ -2607,13 +2765,21 @@
 
           // const elapsedMs = unwrapResult.timeMs > 0 ? unwrapResult.timeMs : (performance.now() - startTime);
           currentUnwrapUv = unwrapResult.uv;
-          _normalizeUvBox(currentUnwrapUv);
+          currentUvInit = (unwrapResult.initUv && unwrapResult.initUv.length === currentUnwrapUv.length)
+            ? unwrapResult.initUv : null;
+          if (currentUvInit) {
+            // 两组 UV 共用同一变换：并排的两个视图可直接叠合比较
+            _normalizeUvPair(currentUnwrapUv, currentUvInit);
+          } else {
+            _normalizeUvBox(currentUnwrapUv);
+          }
 
-          // ARAP：把 solver 采集的逐次迭代收益画到收敛图上
+          // ARAP：把 solver 采集的逐次迭代收益画到收敛图上，并以弹窗展示
           if (method === 'arap') {
             lastArapHistory = (unwrapResult.iterHistory && unwrapResult.iterHistory.length)
               ? unwrapResult.iterHistory : null;
             drawArapChart(lastArapHistory);
+            openArapModal();
           }
 
           if (radioCheckerboard && radioDots) {
@@ -2624,9 +2790,11 @@
             setTextureDistortionEnabled(true, "checkerboard");
           }
 
-          const methodNames = { lscm:'LSCM', bd_lscm:'BD-LSCM', tutte:'Tutte', scp:'SCP', arap:'ARAP', linabf:'ABF', abfpp:'ABF', abf:'ABF' };
+          const methodNames = { lscm:'LSCM', bd_lscm:'BD-LSCM', scp:'SCP', arap:'ARAP', linabf:'ABF', abfpp:'ABF', abf:'ABF' };
           const uvPanelLabelEl = document.getElementById('uv-panel-label');
-          uvPanelLabelEl.textContent = (methodNames[unwrapResult.method] || unwrapResult.method) + ' UV 网格';
+          uvPanelLabelEl.textContent = currentUvInit
+            ? 'ARAP 优化后 UV'
+            : ((methodNames[unwrapResult.method] || unwrapResult.method) + ' UV 网格');
           uvPanelLabelEl.style.color = '';
 
           clearGroup(uvScene, currentUvLines);
@@ -2636,6 +2804,15 @@
           currentUvPins = uvVisual.pins;
           uvScene.add(currentUvLines);
           if (currentUvPins) uvScene.add(currentUvPins);
+
+          // ARAP：把 Tutte 初始化 UV 渲染到第三列（与右侧共用同一坐标系）
+          clearGroup(uvInitScene, currentUvInitLines);
+          currentUvInitLines = null;
+          if (currentUvInit) {
+            const initVisual = buildUvMesh(currentUvInit, currentMeshData.faces, unwrapResult.anchors, false);
+            currentUvInitLines = initVisual.lines;
+            uvInitScene.add(currentUvInitLines);
+          }
 
           /*
           let details =
@@ -2675,6 +2852,7 @@
         controls.update();
         modelRenderer.render(modelScene, modelCamera);
         uvRenderer.render(uvScene, uvCamera);
+        if (isArapUvMode()) uvInitRenderer.render(uvInitScene, uvInitCamera);
       }
 
       rebuildUvGrid();
@@ -2687,6 +2865,21 @@
       clearBtn.addEventListener("click", clearAndReload);
       modelCanvas.addEventListener("pointerdown", onModelPointerDown);
       modelCanvas.addEventListener("pointerup", onModelPointerUp);
+
+      // ARAP 收敛曲线弹窗
+      const arapChartBtn = document.getElementById("arap-chart-btn");
+      if (arapChartBtn) arapChartBtn.addEventListener("click", openArapModal);
+      const arapModalClose = document.getElementById("arap-modal-close");
+      if (arapModalClose) arapModalClose.addEventListener("click", closeArapModal);
+      const arapModalEl = document.getElementById("arap-modal");
+      if (arapModalEl) {
+        arapModalEl.addEventListener("click", function (e) {
+          if (e.target === arapModalEl) closeArapModal();   // 点击遮罩关闭
+        });
+      }
+      window.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && isArapModalOpen()) closeArapModal();
+      });
 
       // 纹理显示单选框切换
       if (radioCheckerboard) {
