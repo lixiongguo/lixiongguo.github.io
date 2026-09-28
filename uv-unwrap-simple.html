@@ -412,6 +412,14 @@
       #change-pin-btn:active {
         background: #0f1a30;
       }
+      #change-pin-btn.active {
+        background: #2b6cff;
+        border-color: #7f9bff;
+        color: #ffffff;
+      }
+      #model-canvas.pin-pick-mode {
+        cursor: crosshair;
+      }
   </style>
 </head>
 <body>
@@ -502,7 +510,7 @@
       <section class="panel">
         <div class="panel-header">
           <span>3D 模型</span>
-          <span>拖拽旋转 / 滚轮缩放</span>
+          <span id="model-panel-hint">拖拽旋转 / 滚轮缩放</span>
         </div>
         <div class="canvas-wrap">
           <canvas id="model-canvas"></canvas>
@@ -651,6 +659,15 @@
       // let lastElapsedMs = 0;
       let currentCustomAnchors = null;  // 用户手动选择的 pin 点
       let lastArapHistory = null;       // 最近一次 ARAP 的逐次迭代收敛指标
+      // LSCM「改pin点」交互选点状态
+      let pinPickMode = false;          // 是否处于选点模式
+      let pinPickSelection = [];        // 已选中的顶点索引（最多 2 个）
+      let pinVertexMap = null;          // 世界坐标 -> currentMeshData.positions 索引
+      let currentPickPreview = null;    // 选点过程中的高亮点云
+      let pinPointerDownInfo = null;    // 用于区分「旋转拖拽」与「点击」
+      const PIN_PICK_COLOR = 0x36e0a0;
+      const pinRaycaster = new THREE.Raycaster();
+      const pinPointer = new THREE.Vector2();
 
       function setStatus(message, color) {
         statusText.textContent = message;
@@ -1262,7 +1279,7 @@
         const mainEl = document.querySelector('.main');
         if (mainEl) mainEl.classList.toggle('arap-mode', isArap);
         if (isArap) requestAnimationFrame(function () { drawArapChart(lastArapHistory); });
-        if (m !== 'lscm' && m !== 'bd_lscm') currentCustomAnchors = null;
+        if (m !== 'lscm' && m !== 'bd_lscm') { currentCustomAnchors = null; resetPinPickMode(); }
         if (currentMeshData) {
           updateModelPinPoints(currentCustomAnchors || chooseAnchorPair(currentMeshData.positions));
         }
@@ -2003,26 +2020,197 @@
         currentPins = points;
       }
 
+      // ==================== LSCM pin 点交互选择 ====================
       /**
-       * "改pin点"按钮点击处理：选择不同于当前 pin 点的另一对最远顶点
+       * "改pin点"按钮点击处理：进入/退出 pin 选点模式。
+       * 进入后由 onModelPointerUp 在 3D 模型画布上拾取顶点，选满 2 个后自动确认。
        */
       function onChangePinClick() {
+        if (busy) return;
         if (!shouldShowPinPoints()) return;
         if (!currentMeshData || !currentMeshData.positions || currentMeshData.positions.length < 2) return;
 
-        const vertices = currentMeshData.positions;
-        const currentAnchors = currentCustomAnchors || chooseAnchorPair(vertices);
-        const newAnchors = chooseAlternativeAnchorPair(vertices, currentAnchors);
-        currentCustomAnchors = newAnchors;
-        updateModelPinPoints(newAnchors);
+        if (pinPickMode) { exitPinPickMode(false); return; }
+        enterPinPickMode();
+      }
 
-        const srcLabel = getCurrentSourceLabel();
-        setStatus(
-          "已更换 pin 点: " + newAnchors[0] + " & " + newAnchors[1] +
-          "（原: " + currentAnchors[0] + " & " + currentAnchors[1] + "），点击展开!" +
-          " / " + srcLabel,
-          "#89f0b6"
+      function enterPinPickMode() {
+        pinPickMode = true;
+        pinPickSelection = [];
+        pinVertexMap = buildVertexIndexMap();
+        if (currentPins) currentPins.visible = false;   // 隐藏自动 pin，避免与手选点混淆
+        setPinPickUI(true);
+        updatePinPickPreview();
+        setStatus('选点模式：请在左侧 3D 模型上依次点击 2 个 pin 顶点（已选 0/2）；再次点击「取消选点」可退出', '#ffd38a');
+      }
+
+      /**
+       * 退出选点模式。
+       * @param {boolean} commit true = 保留本次选择；false = 取消，恢复原 pin 显示
+       */
+      function exitPinPickMode(commit) {
+        pinPickMode = false;
+        pinPickSelection = [];
+        pinVertexMap = null;
+        setPinPickUI(false);
+        clearPinPickPreview();
+        if (currentPins) currentPins.visible = true;
+        if (!commit && currentMeshData) {
+          updateModelPinPoints(currentCustomAnchors || chooseAnchorPair(currentMeshData.positions));
+        }
+      }
+
+      /** 重置选点状态（切换模型 / 切换算法时调用），不改动 currentCustomAnchors */
+      function resetPinPickMode() {
+        if (!pinPickMode && pinPickSelection.length === 0 && !currentPickPreview) return;
+        exitPinPickMode(true);
+      }
+
+      function setPinPickUI(active) {
+        const btn = document.getElementById('change-pin-btn');
+        if (btn) {
+          btn.textContent = active ? '取消选点' : '改pin点';
+          btn.classList.toggle('active', active);
+        }
+        if (modelCanvas) modelCanvas.classList.toggle('pin-pick-mode', active);
+        const hint = document.getElementById('model-panel-hint');
+        if (hint) hint.textContent = active ? '点击模型选择 2 个 pin 顶点' : '拖拽旋转 / 滚轮缩放';
+      }
+
+      function vertexKeyFromXYZ(x, y, z) {
+        return Math.round(x * 100000) + '_' + Math.round(y * 100000) + '_' + Math.round(z * 100000);
+      }
+
+      /** 与 collectMeshData 的顶点合并键保持一致：世界坐标 -> 顶点索引 */
+      function buildVertexIndexMap() {
+        const map = new Map();
+        if (!currentMeshData || !currentMeshData.positions) return map;
+        const P = currentMeshData.positions;
+        for (let i = 0; i < P.length; i++) {
+          const k = vertexKeyFromXYZ(P[i][0], P[i][1], P[i][2]);
+          if (!map.has(k)) map.set(k, i);   // 拆分出的重复顶点保留首个（原始）索引
+        }
+        return map;
+      }
+
+      function nearestVertexIndex(x, y, z) {
+        const P = currentMeshData ? currentMeshData.positions : null;
+        if (!P || P.length === 0) return -1;
+        let best = -1, bestD = Infinity;
+        for (let i = 0; i < P.length; i++) {
+          const dx = P[i][0] - x, dy = P[i][1] - y, dz = P[i][2] - z;
+          const d = dx * dx + dy * dy + dz * dz;
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        return best;
+      }
+
+      function updatePinPickPreview() {
+        clearPinPickPreview();
+        if (!currentModelGroup || !currentMeshData || pinPickSelection.length === 0) return;
+        const P = currentMeshData.positions;
+        const pts = [];
+        for (let i = 0; i < pinPickSelection.length; i++) {
+          const p = P[pinPickSelection[i]];
+          if (!p) continue;
+          pts.push(p[0], p[1], p[2]);
+        }
+        if (pts.length === 0) return;
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+        currentPickPreview = new THREE.Points(
+          geom,
+          new THREE.PointsMaterial({ color: PIN_PICK_COLOR, size: 0.09, sizeAttenuation: true })
         );
+        currentModelGroup.add(currentPickPreview);
+      }
+
+      function clearPinPickPreview() {
+        if (currentPickPreview && currentPickPreview.parent) {
+          currentPickPreview.parent.remove(currentPickPreview);
+        }
+        currentPickPreview = null;
+      }
+
+      function onModelPointerDown(e) {
+        if (busy || !pinPickMode || e.button !== 0) { pinPointerDownInfo = null; return; }
+        pinPointerDownInfo = { x: e.clientX, y: e.clientY };
+      }
+
+      function onModelPointerUp(e) {
+        const info = pinPointerDownInfo;
+        pinPointerDownInfo = null;
+        if (busy || !pinPickMode || e.button !== 0 || !info) return;
+        const dx = e.clientX - info.x, dy = e.clientY - info.y;
+        if (dx * dx + dy * dy > 25) return;   // 判定为旋转拖拽而非点击
+        pickPinVertexAt(e);
+      }
+
+      function pickPinVertexAt(e) {
+        if (!currentModelGroup || !currentMeshData) return;
+        const rect = modelCanvas.getBoundingClientRect();
+        if (rect.width < 1 || rect.height < 1) return;
+
+        pinPointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pinPointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        currentModelGroup.updateMatrixWorld(true);
+        const meshes = [];
+        currentModelGroup.traverse(function (o) { if (o.isMesh && o.geometry) meshes.push(o); });
+        if (meshes.length === 0) return;
+
+        pinRaycaster.setFromCamera(pinPointer, modelCamera);
+        const hits = pinRaycaster.intersectObjects(meshes, false);
+        if (hits.length === 0) {
+          setStatus('选点：未命中模型，请点击模型表面（已选 ' + pinPickSelection.length + '/2）', '#ffd38a');
+          return;
+        }
+
+        const vi = resolveVertexIndexFromHit(hits[0]);
+        if (vi < 0) return;
+
+        if (pinPickSelection.length === 1 && pinPickSelection[0] === vi) {
+          setStatus('选点：该顶点已是第 1 个 pin，请点击另一个顶点（已选 1/2）', '#ffd38a');
+          return;
+        }
+
+        pinPickSelection.push(vi);
+        updatePinPickPreview();
+
+        if (pinPickSelection.length < 2) {
+          setStatus('选点：已选第 1 个 pin（顶点 ' + vi + '），请点击第 2 个顶点（已选 1/2）', '#ffd38a');
+          return;
+        }
+
+        currentCustomAnchors = [pinPickSelection[0], pinPickSelection[1]];
+        updateModelPinPoints(currentCustomAnchors);
+        exitPinPickMode(true);
+        setStatus('已选择 pin 点: ' + currentCustomAnchors[0] + ' & ' + currentCustomAnchors[1] + '，点击「展开」执行 UV 展开', '#89f0b6');
+      }
+
+      /** 由射线命中面选出离命中点最近的角点，再映射回 currentMeshData 的顶点索引 */
+      function resolveVertexIndexFromHit(hit) {
+        const face = hit.face;
+        const geom = hit.object && hit.object.geometry;
+        const posAttr = geom && geom.attributes ? geom.attributes.position : null;
+        if (!face || !posAttr) return -1;
+
+        const m = hit.object.matrixWorld;
+        const p = new THREE.Vector3();
+        const corners = [face.a, face.b, face.c];
+        let bestVi = -1, bestD = Infinity;
+        for (let i = 0; i < corners.length; i++) {
+          const li = corners[i];
+          if (li == null || li < 0 || li >= posAttr.count) continue;
+          p.fromBufferAttribute(posAttr, li).applyMatrix4(m);
+          const d = p.distanceToSquared(hit.point);
+          if (d < bestD) { bestD = d; bestVi = li; }
+        }
+        if (bestVi < 0) return -1;
+
+        p.fromBufferAttribute(posAttr, bestVi).applyMatrix4(m);
+        const idx = pinVertexMap ? pinVertexMap.get(vertexKeyFromXYZ(p.x, p.y, p.z)) : undefined;
+        return (idx === undefined) ? nearestVertexIndex(p.x, p.y, p.z) : idx;
       }
 
 
@@ -2295,6 +2483,7 @@
           let meshData = collectMeshData(root);
           const repair = repairMeshForSolver(meshData);
           meshData = repair.meshData;
+          resetPinPickMode();
           currentCustomAnchors = null;
           const anchors = chooseAnchorPair(meshData.positions);
 
@@ -2345,6 +2534,7 @@
 
       async function updateModel() {
         if (busy) return;
+        if (pinPickMode) exitPinPickMode(false);
 
         if (!currentMeshData) {
           await loadModelPreview();
@@ -2495,6 +2685,8 @@
       modelSelect.addEventListener("change", loadModelPreview);
       reloadBtn.addEventListener("click", updateModel);
       clearBtn.addEventListener("click", clearAndReload);
+      modelCanvas.addEventListener("pointerdown", onModelPointerDown);
+      modelCanvas.addEventListener("pointerup", onModelPointerUp);
 
       // 纹理显示单选框切换
       if (radioCheckerboard) {
