@@ -90,6 +90,9 @@ packages:
       - compute_gauss_curvature
       - get_uv_result
       - get_uv_result_size
+      - get_arap_iters
+      - get_arap_iters_size
+      - get_arap_iters_stride
       - get_last_time_ms
       - dispose
     sources:

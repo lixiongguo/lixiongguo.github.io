@@ -229,6 +229,45 @@
       color: #7e8db5;
       font-size: 12px;
     }
+    /* ===== ARAP 迭代收敛面板（仅切到 ARAP 时占用第三列） ===== */
+    .main.arap-mode {
+      grid-template-columns: 1fr 1fr 1.06fr;
+    }
+    #arap-chart-panel {
+      display: none;
+    }
+    /* 注意：这里必须用 class 驱动显示，不能靠 style.display = ''（那会回落到上面的
+       display:none 规则，面板永远不出现） */
+    .main.arap-mode #arap-chart-panel {
+      display: flex;
+    }
+    .chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px 14px;
+      padding: 8px 16px 0 16px;
+      font-size: 11px;
+      color: #9fb0d8;
+    }
+    .chart-legend i {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      margin-right: 5px;
+      border-radius: 2px;
+      vertical-align: -1px;
+    }
+    .chart-summary {
+      padding: 8px 16px 12px 16px;
+      font-size: 12px;
+      line-height: 1.8;
+      color: #b9c6e8;
+      font-family: "SF Mono", "Consolas", monospace;
+      word-break: break-word;
+    }
+    .chart-summary .hi { color: #ffd700; }
+    .chart-summary .ok { color: #89f0b6; }
+    .chart-summary .warn { color: #ff9d9d; }
     @media (max-width: 900px) {
       .toolbar {
         align-items: flex-start;
@@ -439,8 +478,8 @@
             <!-- ARAP 迭代次数 -->
             <span id="param-arap-iters" style="display:none;font-size:12px;color:#c6d1f4;">
               迭代:
-              <input type="range" id="arap-iters-slider" min="1" max="100" value="30" style="width:80px;vertical-align:middle;margin:0 4px;">
-              <span id="arap-iters-val" style="min-width:24px;display:inline-block;">30</span>
+              <input type="range" id="arap-iters-slider" min="0" max="20" value="5" style="width:80px;vertical-align:middle;margin:0 4px;">
+              <span id="arap-iters-val" style="min-width:24px;display:inline-block;">5</span>
             </span>
           </div>
         </fieldset>
@@ -481,6 +520,22 @@
           <canvas id="uv-canvas"></canvas>
         </div>
         <div class="footer-note">右侧展示展开后的线框 UV 结果。</div>
+      </section>
+
+      <section class="panel" id="arap-chart-panel">
+        <div class="panel-header">
+          <span>ARAP 迭代收敛</span>
+          <span>柱 = 该次迭代的能量收益</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="arap-chart"></canvas>
+        </div>
+        <div class="chart-legend">
+          <span><i style="background:#89f0b6"></i>该次迭代能量下降</span>
+          <span><i style="background:#ffd700"></i>剩余 ARAP 能量</span>
+          <span><i style="background:#6fc3ff"></i>面积畸变（已去整体缩放）</span>
+        </div>
+        <div class="chart-summary" id="arap-chart-summary">切换到 ARAP 后点击「展开」，这里会显示每次迭代的优化收益。</div>
       </section>
     </div>
   </div>
@@ -595,6 +650,7 @@
       let currentTextureMode = "checkerboard";
       // let lastElapsedMs = 0;
       let currentCustomAnchors = null;  // 用户手动选择的 pin 点
+      let lastArapHistory = null;       // 最近一次 ARAP 的逐次迭代收敛指标
 
       function setStatus(message, color) {
         statusText.textContent = message;
@@ -689,6 +745,9 @@
         uvCamera.top = scale;
         uvCamera.bottom = -scale;
         uvCamera.updateProjectionMatrix();
+
+        // 收敛图是按 canvas 尺寸绘制的，窗口尺寸变化后需要重绘
+        drawArapChart(lastArapHistory);
       }
 
       function normalizeObject(root) {
@@ -1198,6 +1257,11 @@
         document.getElementById('param-lscm-pin').style.display = (m === 'lscm' || m === 'bd_lscm') ? '' : 'none';
         document.getElementById('param-arap-iters').style.display = (m === 'arap') ? '' : 'none';
         document.getElementById('param-abf-type').style.display = (m === 'abf') ? '' : 'none';
+        // 收敛图只在 ARAP 下占用第三列（显示/隐藏完全由 .arap-mode 这个 class 决定）
+        const isArap = (m === 'arap');
+        const mainEl = document.querySelector('.main');
+        if (mainEl) mainEl.classList.toggle('arap-mode', isArap);
+        if (isArap) requestAnimationFrame(function () { drawArapChart(lastArapHistory); });
         if (m !== 'lscm' && m !== 'bd_lscm') currentCustomAnchors = null;
         if (currentMeshData) {
           updateModelPinPoints(currentCustomAnchors || chooseAnchorPair(currentMeshData.positions));
@@ -1551,6 +1615,170 @@
         return uv;
       }
 
+      // ==================== ARAP 迭代收敛可视化 ====================
+      // 横轴 = 迭代次数（0 是 Tutte 初始化）；三条信息叠在同一张图上，都按「初始值 = 100%」
+      // 归一化，方便横向比较：
+      //   绿柱：该次迭代把 ARAP 能量降低了多少（占初始能量 %）——“每次迭代的优化收益”
+      //   金线：剩余能量（也就是 local/global 两步共同下降的 ARAP 目标函数，单调不增）
+      //   蓝线：面积畸变均值 mean|ln(A_uv / A_3d)|，与能量权重无关的几何质量
+      function drawArapChart(hist) {
+        const canvas = document.getElementById("arap-chart");
+        if (!canvas) return;
+        const summaryEl = document.getElementById("arap-chart-summary");
+        const wrap = canvas.parentElement;
+        const dpr = window.devicePixelRatio || 1;
+        const w = Math.max(wrap.clientWidth || 0, 160);
+        const h = Math.max(wrap.clientHeight || 0, 140);
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+
+        if (!hist || hist.length < 2) {
+          if (summaryEl) summaryEl.textContent = "切换到 ARAP 后点击「展开」，这里会显示每次迭代的优化收益。";
+          return;
+        }
+
+        const n = hist.length;                    // 采样点数 = 迭代次数 + 1
+        const e0 = hist[0].energy;
+        const eEnd = hist[n - 1].energy;
+        const d0 = hist[0].areaDist;
+        const totalDrop = e0 - eEnd;
+
+        const energyRel = [], areaRel = [], gains = [];
+        for (let i = 0; i < n; i++) {
+          energyRel.push(e0 > 0 ? hist[i].energy / e0 : 0);
+          areaRel.push(d0 > 0 ? hist[i].areaDist / d0 : 0);
+          gains.push(i > 0 && e0 > 0 ? (hist[i - 1].energy - hist[i].energy) / e0 : 0);
+        }
+
+        let yMax = 1;
+        for (let i = 0; i < n; i++) yMax = Math.max(yMax, energyRel[i], areaRel[i]);
+        yMax = Math.max(Math.ceil(yMax / 0.25) * 0.25, 0.25);
+
+        const padL = 46, padR = 14, padT = 14, padB = 30;
+        const plotW = Math.max(w - padL - padR, 10);
+        const plotH = Math.max(h - padT - padB, 10);
+        const X = i => padL + plotW * (i / Math.max(n - 1, 1));
+        const Y = v => padT + plotH * (1 - Math.min(Math.max(v, 0), yMax) / yMax);
+
+        // 网格 + y 轴刻度（均为相对初始值的百分比）
+        ctx.font = "10px 'SF Mono', Consolas, monospace";
+        ctx.textBaseline = "middle";
+        for (let g = 0; g <= 4; g++) {
+          const y = Y(yMax * g / 4);
+          ctx.strokeStyle = (g === 0) ? "rgba(106,132,255,0.40)" : "rgba(106,132,255,0.14)";
+          ctx.beginPath();
+          ctx.moveTo(padL, y);
+          ctx.lineTo(padL + plotW, y);
+          ctx.stroke();
+          ctx.fillStyle = "#7e8db5";
+          ctx.textAlign = "right";
+          ctx.fillText((yMax * g / 4 * 100).toFixed(0) + "%", padL - 6, y);
+        }
+
+        // 每次迭代的能量收益（柱）。首轮迭代的收益通常比后面大 1~2 个数量级，
+        // 所以给非零收益一个最小可见高度，否则尾部会整条消失。
+        const barW = Math.max(plotW / Math.max(n - 1, 1) * 0.66, 1.5);
+        let gainMax = 0, gainMaxAt = -1;
+        for (let i = 1; i < n; i++) {
+          if (gains[i] > 0) {
+            if (gains[i] > gainMax) { gainMax = gains[i]; gainMaxAt = i; }
+            const y = Y(gains[i]);
+            const hBar = Math.max(Y(0) - y, 1.5);
+            const grad = ctx.createLinearGradient(0, y, 0, Y(0));
+            grad.addColorStop(0, "rgba(137,240,182,0.85)");
+            grad.addColorStop(1, "rgba(137,240,182,0.16)");
+            ctx.fillStyle = grad;
+            ctx.fillRect(X(i) - barW / 2, Y(0) - hBar, barW, hBar);
+          }
+        }
+        // 两条归一化曲线（先画畸变，能量压在更上层）
+        const drawSeries = function (vals, color) {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          for (let i = 0; i < n; i++) {
+            const x = X(i), y = Y(vals[i]);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+          ctx.fillStyle = color;
+          for (let i = 0; i < n; i++) {
+            ctx.beginPath();
+            ctx.arc(X(i), Y(vals[i]), 1.8, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        };
+        drawSeries(areaRel, "#6fc3ff");
+        drawSeries(energyRel, "#ffd700");
+
+        // 最大单轮收益的数值标注（“收益”到底有多大）——放在曲线之后，避免被压住
+        if (gainMaxAt > 0 && gainMax > 0.005) {
+          const atRight = X(gainMaxAt) > padL + plotW * 0.5;
+          ctx.fillStyle = "#89f0b6";
+          ctx.textAlign = atRight ? "right" : "left";
+          ctx.textBaseline = "bottom";
+          ctx.fillText((gainMax * 100).toFixed(1) + "%",
+                       X(gainMaxAt) + (atRight ? -barW : barW),
+                       Math.min(Y(gainMax) - 2, padT + plotH - 2));
+        }
+
+        // 收益达到 99% 所需的迭代数：直接回答“滑杆该拉到多少”
+        let k99 = -1;
+        if (totalDrop > 0) {
+          for (let i = 1; i < n; i++) {
+            if ((e0 - hist[i].energy) / totalDrop >= 0.99) { k99 = i; break; }
+          }
+        }
+        if (k99 > 0 && k99 < n - 1) {
+          ctx.save();
+          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = "rgba(137,240,182,0.55)";
+          ctx.beginPath();
+          ctx.moveTo(X(k99), padT);
+          ctx.lineTo(X(k99), padT + plotH);
+          ctx.stroke();
+          ctx.restore();
+          const rightHalf = k99 > (n - 1) / 2;
+          ctx.fillStyle = "#89f0b6";
+          ctx.textAlign = rightHalf ? "right" : "left";
+          ctx.textBaseline = "top";
+          ctx.fillText("99% 收益", X(k99) + (rightHalf ? -4 : 4), padT + 2);
+        }
+
+        // x 轴刻度与轴说明
+        ctx.textBaseline = "middle";
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#7e8db5";
+        const ticks = [0, Math.round((n - 1) / 4), Math.round((n - 1) / 2), Math.round((n - 1) * 3 / 4), n - 1];
+        for (let t = 0; t < ticks.length; t++) {
+          ctx.fillText(String(ticks[t]), X(ticks[t]), padT + plotH + 10);
+        }
+        ctx.textBaseline = "alphabetic";
+        ctx.fillStyle = "#6a7db5";
+        ctx.textAlign = "left";
+        ctx.fillText("迭代", padL, padT + plotH + 25);
+        ctx.textAlign = "right";
+        ctx.fillText("相对初始值", padL + plotW, padT + plotH + 25);
+
+        // 文字摘要
+        const monotone = hist.every(function (s, i) { return i === 0 || s.energy <= hist[i - 1].energy + 1e-9; });
+        const parts = [];
+        if (e0 > 0) {
+          parts.push(`能量 <span class="hi">${e0.toFixed(4)}</span> → <span class="hi">${eEnd.toFixed(4)}</span>` +
+                     `（↓${(totalDrop / e0 * 100).toFixed(2)}%）`);
+        } else {
+          parts.push(`能量 <span class="hi">0</span>（初始即等距）`);
+        }
+        parts.push(`面积畸变 ${hist[0].areaDist.toFixed(4)} → ${hist[n - 1].areaDist.toFixed(4)}`);
+        parts.push(`折面 ${hist[0].flipped.toFixed(0)} → ${hist[n - 1].flipped.toFixed(0)}`);
+        if (k99 > 0 && k99 < n - 1) parts.push(`前 <span class="ok">${k99}</span> 次迭代完成 99% 收益`);
+        if (!monotone) parts.push(`<span class="warn">能量出现上升（异常）</span>`);
+        if (summaryEl) summaryEl.innerHTML = parts.join(" · ");
+      }
+
       async function solveSimpleWasmMethod(meshData, wasmFuncName, methodName, onProgress, optScheme, coneVertices) {
         const vertices = meshData.positions, faces = meshData.faces;
         if (!wasmReady) {
@@ -1623,6 +1851,23 @@
           for (let i = 0; i < uvSize; i++) uvs.push(simpleInstance.getValue(uvPtr + i * 8, "double"));
 
           const timeMs = simpleInstance.ccall("get_last_time_ms", "number", [], []);
+
+          // ARAP 逐次迭代收敛指标（其它方法为空）：每条 = [迭代号, 能量, 面积畸变, 翻面数]
+          const iterHistory = [];
+          const histStride = simpleInstance.ccall("get_arap_iters_stride", "number", [], []);
+          const histSize = simpleInstance.ccall("get_arap_iters_size", "number", [], []);
+          if (histSize > 0 && histStride > 0) {
+            const histPtr = simpleInstance.ccall("get_arap_iters", "number", [], []);
+            for (let i = 0; i < histSize; i += histStride) {
+              iterHistory.push({
+                iter: simpleInstance.getValue(histPtr + i * 8, "double"),
+                energy: simpleInstance.getValue(histPtr + (i + 1) * 8, "double"),
+                areaDist: simpleInstance.getValue(histPtr + (i + 2) * 8, "double"),
+                flipped: simpleInstance.getValue(histPtr + (i + 3) * 8, "double")
+              });
+            }
+          }
+
           simpleInstance.ccall("dispose", "void", [], []);
           if (onProgress) onProgress(1, 1);
 
@@ -1634,7 +1879,8 @@
             anchors: chooseAnchorPair(vertices),
             flippedFaceCount: countFlippedFaces(uv, faces),
             timeMs: timeMs,
-            method: methodName
+            method: methodName,
+            iterHistory: iterHistory
           };
         } finally {
           simpleInstance._free(posPtr);
@@ -2064,6 +2310,10 @@
           currentSourcePath = resolved.sourcePath;
           currentRawFaces = resolved.rawFaces;
 
+          // 换了模型/切了网格，上次的 ARAP 收敛曲线不再对应，清空
+          lastArapHistory = null;
+          drawArapChart(null);
+
           if (currentRawFaces && currentRawFaces.length > 0) {
             let quadCount = 0;
             for (let i = 0; i < currentRawFaces.length; i++) {
@@ -2149,11 +2399,9 @@
             unwrapResult = await solveTutteAsync(currentMeshData, function() {});
           } else if (method === 'scp') {
             unwrapResult = await solveSCPAsync(currentMeshData, function(/* p, t */) {
-              // updateTimingProgress(p, t);
             });
           } else if (method === 'arap') {
             unwrapResult = await solveARAPAsync(currentMeshData, getARAPIterations(), function(/* p, t */) {
-              // updateTimingProgress(p, t);
             });
             unwrapResult.maxIter = getARAPIterations();
           } else if (method === 'abf') {
@@ -2170,6 +2418,13 @@
           // const elapsedMs = unwrapResult.timeMs > 0 ? unwrapResult.timeMs : (performance.now() - startTime);
           currentUnwrapUv = unwrapResult.uv;
           _normalizeUvBox(currentUnwrapUv);
+
+          // ARAP：把 solver 采集的逐次迭代收益画到收敛图上
+          if (method === 'arap') {
+            lastArapHistory = (unwrapResult.iterHistory && unwrapResult.iterHistory.length)
+              ? unwrapResult.iterHistory : null;
+            drawArapChart(lastArapHistory);
+          }
 
           if (radioCheckerboard && radioDots) {
             radioCheckerboard.disabled = false;
