@@ -1786,12 +1786,10 @@
           if (boundary[i]) continue;
           const curvature = twoPi - angleSum[i];
           if (Math.abs(curvature) < 0.08) continue;
-          // Cone angle: use 2π + curvature surplus to amplify effect
-          // Positive curvature (angleSum < 2π) → coneAngle > 2π for visible cone pinch
-          // Use 2π + k * |curvature|, where k amplifies small curvature into visible cone
-          const k = 8.0;  // amplification factor
-          const coneAngle = twoPi + curvature * k;
-          const clampedAngle = Math.max(Math.PI * 0.75, Math.min(Math.PI * 6, coneAngle));
+          // Θ = 2π − K. Positive curvature becomes a cone (Θ < 2π); a saddle stays
+          // above 2π. Clamped so the chart does not wrap several full turns.
+          const coneAngle = twoPi - curvature;
+          const clampedAngle = Math.max(Math.PI * 0.5, Math.min(Math.PI * 2.5, coneAngle));
           candidates.push({ index: i, angle: clampedAngle, score: Math.abs(curvature) });
         }
         candidates.sort(function (a, b) { return b.score - a.score; });
@@ -2424,7 +2422,10 @@
 
         try {
           const startTime = performance.now();
-          if (supportsConeSelection(method) && coneVertices.length === 0 && currentMeshData) {
+          // CETM lays the metric into the plane without cutting seams. An automatic
+          // cone (Θ ≠ 2π) is a branch point, so the chart overlaps. Cones are
+          // applied only after the user places them or clicks the Ben-Chen button.
+          if (method !== 'cetm' && supportsConeSelection(method) && coneVertices.length === 0 && currentMeshData) {
             coneVertices = computeBenChenCones(currentMeshData);
             updateConeDisplay();
           }
