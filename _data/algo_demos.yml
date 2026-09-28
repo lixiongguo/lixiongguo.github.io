@@ -12,11 +12,7 @@
   models_dir: assets/Models
   ready: true
 
-- id: uv-unwrap-origami
-  title: 参数化与折纸展开
-  url: /uv-unwrap-origami.html
-  models_dir: assets/Models
-  ready: true
+
 
 - id: uv-unwrap-cone-global
   title: 锥奇异点参数化
@@ -78,10 +74,19 @@
   url: /fluid-sim.html
   ready: false
 
-- id: voronoi_delaunay
-  title: Voronoi / Delaunay
-  url: /voronoi_delaunay.html
 - id: cpu-path-tracing
   title: CPU路径追踪
   url: /cpu-path-tracing.html
   ready: true
+
+
+- id: uv-unwrap-origami
+  title: 参数化与折纸展开
+  url: /uv-unwrap-origami.html
+  models_dir: assets/Models
+  ready: false
+
+- id: voronoi_delaunay
+  title: Voronoi / Delaunay
+  url: /voronoi_delaunay.html
+  ready: false
