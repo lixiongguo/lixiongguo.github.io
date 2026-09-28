@@ -13,6 +13,14 @@
   
   <script src="assets/js/wasm-loader.js"></script>
   <script src="assets/wasm/uv_unwrap_simple.js"></script>
+  <!-- 核心优化公式渲染：本页没有 layout，需自行引入 MathJax（与全站一致用 v3） -->
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['\\(', '\\)']], displayMath: [['$$', '$$']] },
+      startup: { typeset: false }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; }
@@ -289,16 +297,36 @@
          分辨率，带 padding 会让位图尺寸与显示尺寸不一致 */
       margin: 12px 14px 0 14px;
     }
-    /* ===== ARAP 双 UV 对比：三列布局（模型 | Tutte 初始 UV | ARAP 优化 UV） ===== */
-    .main.arap-mode {
-      grid-template-columns: 1fr 1fr 1.06fr;
+    /* ===== UV 面板：Tutte 初始 / ARAP 优化后 选项卡 ===== */
+    .uv-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 3px;
+      border-radius: 8px;
+      background: rgba(20, 25, 45, 0.85);
+      border: 1px solid rgba(106, 132, 255, 0.22);
     }
-    #uv-init-panel {
+    .uv-tabs[hidden] {
       display: none;
     }
-    /* 必须用 class 驱动显示：style.display = '' 会回落到上面的 display:none */
-    .main.arap-mode #uv-init-panel {
-      display: flex;
+    .uv-tab {
+      padding: 4px 12px;
+      font-size: 12px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: #8fa0c8;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+    .uv-tab:hover {
+      color: #c6d1f4;
+      background: rgba(106, 132, 255, 0.12);
+    }
+    .uv-tab.active {
+      background: #2b6cff;
+      color: #ffffff;
     }
     .chart-legend {
       display: flex;
@@ -338,9 +366,6 @@
       .main {
         grid-template-columns: 1fr;
         grid-template-rows: 1fr 1fr;
-      }
-      .main.arap-mode {
-        grid-template-rows: 1fr 1fr 1fr;
       }
     }
       #reload-btn {
@@ -496,6 +521,49 @@
         background: #1a2a4a;
         border-color: rgba(106, 132, 255, 0.55);
       }
+      /* ===== UV 面板右上角：当前算法的核心优化公式 ===== */
+      .formula-box {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        max-width: min(62%, 560px);
+        padding: 10px 14px 11px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 180, 70, 0.28);
+        background: rgba(9, 16, 29, 0.84);
+        backdrop-filter: blur(6px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+        color: #dbe3fb;
+        font-size: 12.5px;
+        line-height: 1.5;
+        pointer-events: none;
+        z-index: 5;
+      }
+      .formula-box[hidden] {
+        display: none;
+      }
+      .formula-title {
+        color: #ffb446;
+        font-size: 11px;
+        letter-spacing: 0.3px;
+        margin-bottom: 6px;
+        white-space: nowrap;
+      }
+      .formula-body {
+        overflow-x: auto;
+      }
+      .formula-body mjx-container[display="true"] {
+        margin: 2px 0 !important;
+      }
+      .formula-note {
+        display: block;
+        margin-top: 7px;
+        padding-top: 6px;
+        border-top: 1px solid rgba(106, 132, 255, 0.18);
+        color: #93a3cc;
+        font-size: 11px;
+        line-height: 1.5;
+      }
   </style>
 </head>
 <body>
@@ -597,25 +665,22 @@
         <div class="footer-note">左侧显示原始三角网格与自动选择的约束点。</div>
       </section>
 
-      <section class="panel" id="uv-init-panel">
-        <div class="panel-header">
-          <span>Tutte 初始 UV</span>
-          <span>ARAP 迭代起点</span>
-        </div>
-        <div class="canvas-wrap">
-          <canvas id="uv-init-canvas"></canvas>
-        </div>
-        <div class="footer-note">与左侧同一坐标系：边界完全重合，差异即 ARAP 的优化量。</div>
-      </section>
-
       <section class="panel">
         <div class="panel-header">
           <span id="uv-panel-label">UV 网格</span>
-          <span>边界归一化到 0..1</span>
+          <div class="uv-tabs" id="uv-tabs" hidden>
+            <button class="uv-tab" id="uv-tab-init" type="button">Tutte 初始 UV</button>
+            <button class="uv-tab active" id="uv-tab-final" type="button">ARAP 优化后 UV</button>
+          </div>
+          <span id="uv-panel-hint">边界归一化到 0..1</span>
         </div>
 
         <div class="canvas-wrap">
           <canvas id="uv-canvas"></canvas>
+          <div class="formula-box" id="uv-formula-box" hidden>
+            <div class="formula-title" id="uv-formula-title"></div>
+            <div class="formula-body" id="uv-formula-body"></div>
+          </div>
         </div>
         <div class="footer-note">右侧展示展开后的线框 UV 结果。</div>
       </section>
@@ -704,7 +769,6 @@
 
       const modelCanvas = document.getElementById("model-canvas");
       const uvCanvas = document.getElementById("uv-canvas");
-      const uvInitCanvas = document.getElementById("uv-init-canvas");
       const modelSelect = document.getElementById("model-select");
       const reloadBtn = document.getElementById("reload-btn");
       const clearBtn = document.getElementById("clear-btn");
@@ -715,24 +779,18 @@
 
       const modelRenderer = new THREE.WebGLRenderer({ canvas: modelCanvas, antialias: true, alpha: true });
       const uvRenderer = new THREE.WebGLRenderer({ canvas: uvCanvas, antialias: true, alpha: true });
-      const uvInitRenderer = new THREE.WebGLRenderer({ canvas: uvInitCanvas, antialias: true, alpha: true });
       modelRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       uvRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      uvInitRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
       const modelScene = new THREE.Scene();
       const uvScene = new THREE.Scene();
-      const uvInitScene = new THREE.Scene();
       modelScene.background = new THREE.Color(0x08101d);
       uvScene.background = new THREE.Color(0x091120);
-      uvInitScene.background = new THREE.Color(0x091120);
 
       const modelCamera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
       modelCamera.position.set(1.8, 1.5, 1.8);
       const uvCamera = new THREE.OrthographicCamera(-1.15, 1.15, 1.15, -1.15, 0.1, 10);
       uvCamera.position.set(0, 0, 2);
-      const uvInitCamera = new THREE.OrthographicCamera(-1.15, 1.15, 1.15, -1.15, 0.1, 10);
-      uvInitCamera.position.set(0, 0, 2);
 
       const controls = new THREE.OrbitControls(modelCamera, modelCanvas);
       controls.enableDamping = true;
@@ -748,8 +806,9 @@
       let currentPins = null;
       let currentUvLines = null;
       let currentUvPins = null;
-      let currentUvInitLines = null;    // ARAP 的 Tutte 初始 UV 线框
+      let currentUvInitLines = null;    // ARAP 的 Tutte 初始 UV 线框（与 currentUvLines 同场景，靠 visible 切换）
       let currentUvInit = null;         // ARAP 的 Tutte 初始 UV 数据（扁平索引 -> [u,v]）
+      let uvTabMode = 'final';          // UV 面板当前选项卡：'final' | 'init'
       let currentHomologyLines = null;
       let busy = false;
       let currentMeshData = null;
@@ -855,19 +914,6 @@
 
         modelRenderer.setSize(modelRect.width, modelRect.height, false);
         uvRenderer.setSize(uvRect.width, uvRect.height, false);
-
-        // 第三列（Tutte 初始 UV）只在 ARAP 下可见：隐藏时尺寸为 0，跳过以免把画布设成 0×0
-        const uvInitRect = uvInitCanvas.parentElement.getBoundingClientRect();
-        if (uvInitRect.width > 0 && uvInitRect.height > 0) {
-          uvInitRenderer.setSize(uvInitRect.width, uvInitRect.height, false);
-          const initAspect = uvInitRect.width / Math.max(uvInitRect.height, 1);
-          const initScale = 1.15;
-          uvInitCamera.left = -initScale * initAspect;
-          uvInitCamera.right = initScale * initAspect;
-          uvInitCamera.top = initScale;
-          uvInitCamera.bottom = -initScale;
-          uvInitCamera.updateProjectionMatrix();
-        }
 
         modelCamera.aspect = modelRect.width / Math.max(modelRect.height, 1);
         modelCamera.updateProjectionMatrix();
@@ -1394,6 +1440,78 @@
         return getArapInitWeight() === 'uniform' ? 1 : 0;
       }
 
+      // ==================== 当前算法的核心优化公式 ====================
+      // tex 交给 MathJax 排版；note 是纯文本补充说明（不参与数学模式）。
+      const METHOD_FORMULAS = {
+        lscm: {
+          title: 'LSCM · 最小二乘共形映射',
+          tex: 'E_{\\mathrm{LSCM}}(u)=\\int_{M}\\lvert\\partial_{\\bar z}u\\rvert^{2}\\,dA=\\tfrac12\\int_{M}\\lVert\\nabla u\\rVert^{2}dA-A(u)',
+          note: '∂z̄u = ½(∂xu + i·∂yu) 为 Cauchy–Riemann 算子，A(u) 为 UV 有向面积。关于 u 是二次能量 → 一次线性求解（法方程）即得全局最优。'
+        },
+        scp: {
+          title: 'SCP · 谱共形参数化',
+          tex: 'Q\\,u=\\lambda\\,M\\,u,\\qquad \\lambda_{\\min}=\\min_{u\\neq 0}\\frac{u^{\\top}Q\\,u}{u^{\\top}M\\,u}',
+          note: 'Q 为共形能量矩阵（cot-Laplacian − 2×有向面积），M 为顶点面积质量矩阵；取最小非零广义特征值对应的特征向量。'
+        },
+        arap: {
+          title: 'ARAP · 尽可能刚性',
+          tex: 'E_{\\mathrm{ARAP}}(u)=\\min_{R_f\\in SO(2)}\\sum_{f}\\sum_{(i,j)\\in f}w_{ij}\\,\\lVert(u_i-u_j)-R_f\\,(x_i-x_j)\\rVert^{2}',
+          note: 'local step：逐面用 SVD / Procrustes 求最优旋转 Rf；global step：固定 Rf 解泊松系统（稀疏线性）。Tutte 初始化后 local/global 交替迭代。'
+        },
+        abf: {
+          title: 'ABF++ · 基于角度的展开',
+          tex: '\\begin{gathered}\\min_{\\alpha}\\;E_{\\mathrm{ABF}}(\\alpha)=\\sum_{f}\\sum_{k=1}^{3}\\frac{(\\alpha_k-\\beta_k)^{2}}{\\beta_k^{2}}\\\\[6pt]\\text{s.t.}\\quad \\sum_{k=1}^{3}\\alpha_k^{(f)}=\\pi,\\qquad \\sum_{k\\ni v}\\alpha_k=\\begin{cases}2\\pi, & v\\in M^{\\circ}\\\\ \\theta_v, & v\\in\\partial M\\end{cases}\\end{gathered}',
+          note: 'α 为待求角度，β 为 3D 目标角。角度解出后再做第二步「角度 → UV」的线性重建。'
+        },
+        bd_lscm: {
+          title: 'BD-LSCM · 有界失真',
+          tex: '\\begin{gathered}\\min_{u}\\;\\tfrac12\\int_{M}\\lVert\\nabla u\\rVert^{2}dA-A(u)\\\\[6pt]\\text{s.t.}\\quad K(u)=\\frac{\\sigma_1}{\\sigma_2}\\le\\sigma,\\qquad J(u)>0\\end{gathered}',
+          note: 'K 为共形失真（奇异值比）上界，J 为 Jacobian：要求保向、不翻面。以 LSCM 解为初值做带约束的增广拉格朗日优化。'
+        }
+      };
+
+      /** MathJax 是 async 加载的：就绪前等待，避免公式以源码形式残留 */
+      function whenMathJaxReady() {
+        if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
+          return Promise.resolve();
+        }
+        return new Promise(function (resolve) {
+          let tries = 0;
+          const timer = setInterval(function () {
+            if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
+              clearInterval(timer); resolve();
+            } else if (++tries > 150) {
+              clearInterval(timer); resolve();   // ~15s 后放弃（离线 / CDN 不可用）
+            }
+          }, 100);
+        });
+      }
+
+      function typesetFormulaBox(el) {
+        whenMathJaxReady().then(function () {
+          if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
+            return window.MathJax.typesetPromise([el]);
+          }
+        }).catch(function (err) { console.warn('公式排版失败:', err); });
+      }
+
+      /** 在 UV 面板右上角显示当前算法的核心优化公式 */
+      function updateUvFormula(method) {
+        const box = document.getElementById('uv-formula-box');
+        const titleEl = document.getElementById('uv-formula-title');
+        const bodyEl = document.getElementById('uv-formula-body');
+        if (!box || !titleEl || !bodyEl) return;
+
+        const spec = METHOD_FORMULAS[method];
+        if (!spec) { box.hidden = true; bodyEl.innerHTML = ''; return; }
+
+        titleEl.textContent = spec.title;
+        bodyEl.innerHTML = '$$' + spec.tex + '$$' +
+          (spec.note ? '<span class="formula-note">' + spec.note + '</span>' : '');
+        box.hidden = false;
+        typesetFormulaBox(bodyEl);
+      }
+
       /** 算法切换 + ARAP 初始化参数切换 → 统一更新参数面板 */
       function onParamChange() {
         const m = getCurrentMethod();
@@ -1406,20 +1524,20 @@
         document.getElementById('param-lscm-pin').style.display = (m === 'lscm' || m === 'bd_lscm') ? '' : 'none';
         document.getElementById('param-arap-iters').style.display = isArap ? '' : 'none';
         document.getElementById('param-abf-type').style.display = (m === 'abf') ? '' : 'none';
+        // UV 面板右上角显示该算法要解的核心优化公式
+        updateUvFormula(m);
         // 收敛曲线入口只在 ARAP 下出现；切走后自动关闭弹窗
         const arapChartEntry = document.getElementById('param-arap-chart');
         if (arapChartEntry) arapChartEntry.style.display = isArap ? '' : 'none';
         if (!isArap) {
           closeArapModal();
-          // 离开 ARAP：清掉「Tutte 初始 UV」视图
+          // 离开 ARAP：清掉「Tutte 初始 UV」选项卡，回到单视图
           currentUvInit = null;
-          clearGroup(uvInitScene, currentUvInitLines);
+          clearGroup(uvScene, currentUvInitLines);
           currentUvInitLines = null;
+          setUvTab('final');
+          resetUvPanelHeader();
         }
-        // ARAP 下启用第三列（Tutte 初始 UV）
-        const mainEl = document.querySelector('.main');
-        if (mainEl) mainEl.classList.toggle('arap-mode', isArap);
-        if (isArap) requestAnimationFrame(function () { resize(); });
         if (m !== 'lscm' && m !== 'bd_lscm') { currentCustomAnchors = null; resetPinPickMode(); }
         if (currentMeshData) {
           updateModelPinPoints(currentCustomAnchors || chooseAnchorPair(currentMeshData.positions));
@@ -2561,6 +2679,7 @@
       }
 
       function rebuildUvGrid() {
+        const grid = new THREE.Group();
         const gridMaterial = new THREE.LineBasicMaterial({ color: 0x1a2947, transparent: true, opacity: 0.85 });
         const coords = [];
         for (let i = -10; i <= 10; i++) {
@@ -2568,19 +2687,52 @@
           coords.push(-1, t, 0, 1, t, 0);
           coords.push(t, -1, 0, t, 1, 0);
         }
-        const makeGrid = function () {
-          const geom = new THREE.BufferGeometry();
-          geom.setAttribute("position", new THREE.Float32BufferAttribute(coords, 3));
-          return new THREE.LineSegments(geom, gridMaterial);
-        };
-        uvScene.add(makeGrid());
-        uvInitScene.add(makeGrid());   // Tutte 初始 UV 视图用同样的网格底
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute("position", new THREE.Float32BufferAttribute(coords, 3));
+        grid.add(new THREE.LineSegments(geom, gridMaterial));
+        uvScene.add(grid);
       }
 
-      /** 当前是否处于 ARAP 双 UV 模式（第三列可见） */
-      function isArapUvMode() {
-        const mainEl = document.querySelector('.main');
-        return !!(mainEl && mainEl.classList.contains('arap-mode'));
+      /** 是否有可切换的「Tutte 初始 UV」选项卡（仅 ARAP 且已展开时） */
+      function hasUvInitTab() {
+        return !!(currentUvInit && currentUvInitLines);
+      }
+
+      /**
+       * 切换 UV 面板选项卡：Tutte 初始 UV / ARAP 优化后 UV。
+       * 两组线框都在同一个 uvScene 里，只靠 visible 切换，不需要第二个画布。
+       */
+      function setUvTab(mode) {
+        const dual = hasUvInitTab();
+        uvTabMode = (mode === 'init' && dual) ? 'init' : 'final';
+
+        const tabsEl = document.getElementById('uv-tabs');
+        if (tabsEl) tabsEl.hidden = !dual;
+        const tabInit = document.getElementById('uv-tab-init');
+        const tabFinal = document.getElementById('uv-tab-final');
+        if (tabInit) tabInit.classList.toggle('active', uvTabMode === 'init');
+        if (tabFinal) tabFinal.classList.toggle('active', uvTabMode === 'final');
+
+        if (currentUvInitLines) currentUvInitLines.visible = (uvTabMode === 'init');
+        if (currentUvLines) currentUvLines.visible = (uvTabMode === 'final');
+
+        if (dual) {
+          const labelEl = document.getElementById('uv-panel-label');
+          const hintEl = document.getElementById('uv-panel-hint');
+          if (labelEl) {
+            labelEl.textContent = (uvTabMode === 'init') ? 'Tutte 初始 UV' : 'ARAP 优化后 UV';
+            labelEl.style.color = '';
+          }
+          if (hintEl) hintEl.textContent = (uvTabMode === 'init') ? 'ARAP 迭代起点' : 'ARAP 迭代结果';
+        }
+      }
+
+      /** 恢复 UV 面板标题与提示（未展开 / 非 ARAP 时） */
+      function resetUvPanelHeader() {
+        const labelEl = document.getElementById('uv-panel-label');
+        const hintEl = document.getElementById('uv-panel-hint');
+        if (labelEl) { labelEl.textContent = 'UV 网格'; labelEl.style.color = ''; }
+        if (hintEl) hintEl.textContent = '边界归一化到 0..1';
       }
 
       function clearGroup(scene, objectRef) {
@@ -2625,9 +2777,11 @@
           clearGroup(modelScene, currentModelGroup);
           clearGroup(uvScene, currentUvLines);
           clearGroup(uvScene, currentUvPins);
-          clearGroup(uvInitScene, currentUvInitLines);
+          clearGroup(uvScene, currentUvInitLines);
           currentUvInitLines = null;
           currentUvInit = null;
+          setUvTab('final');
+          resetUvPanelHeader();
           clearHomologyOverlay();
           clearOtherOverlays();
           clearTexturedMesh();
@@ -2792,10 +2946,10 @@
 
           const methodNames = { lscm:'LSCM', bd_lscm:'BD-LSCM', scp:'SCP', arap:'ARAP', linabf:'ABF', abfpp:'ABF', abf:'ABF' };
           const uvPanelLabelEl = document.getElementById('uv-panel-label');
-          uvPanelLabelEl.textContent = currentUvInit
-            ? 'ARAP 优化后 UV'
-            : ((methodNames[unwrapResult.method] || unwrapResult.method) + ' UV 网格');
+          uvPanelLabelEl.textContent = (methodNames[unwrapResult.method] || unwrapResult.method) + ' UV 网格';
           uvPanelLabelEl.style.color = '';
+          const uvPanelHintEl = document.getElementById('uv-panel-hint');
+          if (uvPanelHintEl) uvPanelHintEl.textContent = '边界归一化到 0..1';
 
           clearGroup(uvScene, currentUvLines);
           clearGroup(uvScene, currentUvPins);
@@ -2805,14 +2959,15 @@
           uvScene.add(currentUvLines);
           if (currentUvPins) uvScene.add(currentUvPins);
 
-          // ARAP：把 Tutte 初始化 UV 渲染到第三列（与右侧共用同一坐标系）
-          clearGroup(uvInitScene, currentUvInitLines);
+          // ARAP：Tutte 初始 UV 与优化后 UV 都放进同一个 uvScene，由选项卡切换显示
+          clearGroup(uvScene, currentUvInitLines);
           currentUvInitLines = null;
           if (currentUvInit) {
             const initVisual = buildUvMesh(currentUvInit, currentMeshData.faces, unwrapResult.anchors, false);
             currentUvInitLines = initVisual.lines;
-            uvInitScene.add(currentUvInitLines);
+            uvScene.add(currentUvInitLines);
           }
+          setUvTab('final');   // 默认显示优化后结果，可切到「Tutte 初始 UV」
 
           /*
           let details =
@@ -2852,7 +3007,6 @@
         controls.update();
         modelRenderer.render(modelScene, modelCamera);
         uvRenderer.render(uvScene, uvCamera);
-        if (isArapUvMode()) uvInitRenderer.render(uvInitScene, uvInitCamera);
       }
 
       rebuildUvGrid();
@@ -2865,6 +3019,12 @@
       clearBtn.addEventListener("click", clearAndReload);
       modelCanvas.addEventListener("pointerdown", onModelPointerDown);
       modelCanvas.addEventListener("pointerup", onModelPointerUp);
+
+      // UV 面板选项卡：Tutte 初始 UV / ARAP 优化后 UV
+      const uvTabInitBtn = document.getElementById("uv-tab-init");
+      if (uvTabInitBtn) uvTabInitBtn.addEventListener("click", function () { setUvTab("init"); });
+      const uvTabFinalBtn = document.getElementById("uv-tab-final");
+      if (uvTabFinalBtn) uvTabFinalBtn.addEventListener("click", function () { setUvTab("final"); });
 
       // ARAP 收敛曲线弹窗
       const arapChartBtn = document.getElementById("arap-chart-btn");
