@@ -698,6 +698,12 @@
             <span id="param-lscm-pin" style="display:none;font-size:12px;color:#c6d1f4;">
               <button id="change-pin-btn" type="button">改pin点</button>
             </span>
+            <!-- BD-LSCM 共形失真上界 K = σ1/σ2 ≤ σ -->
+            <span id="param-bd-bound" style="display:none;font-size:12px;color:#c6d1f4;">
+              失真上界 σ:
+              <input type="range" id="bd-bound-slider" min="1" max="10" step="0.1" value="2" title="共形失真上界 K=σ₁/σ₂ ≤ σ，σ≥1。越小越接近共形，越大允许的形变越多。" style="width:90px;vertical-align:middle;margin:0 4px;">
+              <span id="bd-bound-val" style="min-width:32px;display:inline-block;">2.0</span>
+            </span>
             <!-- ABF 子类型选择 -->
             <span id="param-abf-type" style="display:none;font-size:12px;color:#c6d1f4;">
               ABF方法:
@@ -1674,6 +1680,8 @@
         document.getElementById('param-arap-init-boundary').style.display = isArap ? '' : 'none';
         document.getElementById('param-arap-init-weight').style.display = isArap ? '' : 'none';
         document.getElementById('param-lscm-pin').style.display = (m === 'lscm' || m === 'bd_lscm') ? '' : 'none';
+        const bdBoundPanel = document.getElementById('param-bd-bound');
+        if (bdBoundPanel) bdBoundPanel.style.display = (m === 'bd_lscm') ? '' : 'none';
         document.getElementById('param-arap-iters').style.display = isArap ? '' : 'none';
         document.getElementById('param-abf-type').style.display = (m === 'abf') ? '' : 'none';
         // UV 面板右上角显示该算法要解的核心优化公式
@@ -1739,6 +1747,13 @@
       if (arapSlider) {
         arapSlider.addEventListener('input', function() {
           document.getElementById('arap-iters-val').textContent = this.value;
+        });
+      }
+      const bdBoundSlider = document.getElementById('bd-bound-slider');
+      if (bdBoundSlider) {
+        bdBoundSlider.addEventListener('input', function() {
+          const label = document.getElementById('bd-bound-val');
+          if (label) label.textContent = getBdDistortionBound().toFixed(1);
         });
       }
       document.getElementById('change-pin-btn').addEventListener('click', onChangePinClick);
@@ -1871,6 +1886,13 @@
         return '错误码 ' + ret;
       }
 
+      function getBdDistortionBound() {
+        const el = document.getElementById('bd-bound-slider');
+        let v = el ? parseFloat(el.value) : 2;
+        if (!isFinite(v) || v < 1) v = 1;
+        return v;
+      }
+
       // ==================== BD-LSCM (LSCM + 有界失真优化) ====================
       let bdLscmInst = null, bdLscmReady = false, bdLscmFailed = false;
       let bdLscmPromise = null;
@@ -1897,12 +1919,21 @@
         const lscmResult = await solveLSCMAsync(meshData, onProgress);
         if (onProgress) onProgress(0.5, 1);
 
-        // Step 2: 提取数据
-        const v = meshData.positions, f = meshData.faces;
-        const pos2D = [], facesFlat = [], uvFlat = [];
+        // LSCM 若修过非流形，顶点数会变；BD 必须用同一份网格。
+        const solvedMesh = (lscmResult.uv && currentMeshData &&
+          lscmResult.uv.length === currentMeshData.positions.length)
+          ? currentMeshData : meshData;
+
+        // Step 2: 提取数据。传三维坐标，求解器按三角形局部标架计算，不能只投影到 xy。
+        const v = solvedMesh.positions, f = solvedMesh.faces;
+        const pos = [], facesFlat = [], uvFlat = [];
         const nV = v.length;
+        if (!lscmResult.uv || lscmResult.uv.length !== nV) {
+          throw new Error('LSCM 与网格顶点数不一致');
+        }
         for (let i = 0; i < nV; i++) {
-          pos2D.push(v[i][0], v[i][1]);
+          const p = v[i];
+          pos.push(p[0], p[1], p.length > 2 ? p[2] : 0);
           uvFlat.push(lscmResult.uv[i][0], lscmResult.uv[i][1]);
         }
         for (let i = 0; i < f.length; i++) {
@@ -1922,25 +1953,35 @@
         const initResult = await initBDLscm();
         if (!initResult) throw new Error('BD-LSCM 引擎未就绪');
 
+        const distortionBound = getBdDistortionBound();
         const result = bdLscmInst.solveBDLscmFull(
-          pos2D, facesFlat, uvFlat, anchorVerts, anchorTargets,
-          2.0,   // distortion_bound
-          8,     // outer_iterations
-          400,   // inner_iterations
+          pos, facesFlat, uvFlat, anchorVerts, anchorTargets,
+          distortionBound,
+          4,     // outer_iterations（帧对齐）
+          8,     // inner_iterations（每次帧对齐最多 8 次牛顿步，总分解次数另有上限）
           1.0,   // lscm_weight
           5000.0,// distortion_penalty
           5000.0,// positivity_penalty
-          1e-2   // initial_step
+          1e-2   // initial_step（牛顿法不使用，保留接口）
         );
         const ms = performance.now() - t0;
 
         if (onProgress) onProgress(1, 1);
 
-        // 提取 UV
+        // embind 的 std::vector 在 JS 里是 VectorDouble（.size()/.get(i)），不是普通数组。
+        const flat = result.uv_flat;
+        const at = (typeof flat.get === 'function')
+          ? function (i) { return flat.get(i); }
+          : function (i) { return flat[i]; };
         const uv = new Array(nV);
-        for (let i = 0; i < nV; i++)
-          uv[i] = [result.uv_flat[i*2], result.uv_flat[i*2+1]];
+        for (let i = 0; i < nV; i++) uv[i] = [at(i * 2), at(i * 2 + 1)];
+        ['uv_flat', 'face_distortions', 'face_jacobians', 'face_cones'].forEach(function (key) {
+          const v = result[key];
+          if (v && typeof v.delete === 'function') v.delete();
+        });
 
+        const kMax = Number(result.max_distortion);
+        const jMin = Number(result.min_jacobian);
         return {
           uv, anchors,
           flippedFaceCount: countFlippedFaces(uv, f),
@@ -1948,8 +1989,8 @@
           method: 'bd_lscm',
           meshData: meshData,
           pinInfo: anchors[0] + ' & ' + anchors[1],
-          details: 'Kmax=' + result.max_distortion.toFixed(3) +
-                   ' Jmin=' + result.min_jacobian.toFixed(4) +
+          details: 'Kmax=' + (Number.isFinite(kMax) ? kMax.toFixed(3) : String(kMax)) +
+                   ' Jmin=' + (Number.isFinite(jMin) ? jMin.toFixed(4) : String(jMin)) +
                    ' iter=' + result.iterations
         };
       }
@@ -3750,7 +3791,7 @@
 
         let methodLabel;
         if (method === 'lscm') methodLabel = 'LSCM';
-        else if (method === 'bd_lscm') methodLabel = 'BD-LSCM (有界失真)';
+        else if (method === 'bd_lscm') methodLabel = 'BD-LSCM (失真上界 σ=' + getBdDistortionBound().toFixed(1) + ')';
         else if (method === 'scp') methodLabel = 'SCP (谱共形)';
         else if (method === 'arap') {
           methodLabel = 'ARAP (' + getARAPIterations() + ' iters, Tutte初始化 ' +
