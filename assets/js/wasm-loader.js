@@ -18,16 +18,19 @@
     return _loadedScripts[url];
   }
 
-  async function loadWasmModule(name, factoryName) {
+  async function loadWasmModule(name, factoryName, extraConfig) {
     const key = name + '::' + factoryName;
     if (_instances[key]) return _instances[key];
     await loadScript(WASM_BASE + name + '.js');
     if (typeof global[factoryName] !== 'function') {
       throw new Error(factoryName + ' not found after loading ' + name + '.js');
     }
-    const inst = await global[factoryName]({
-      locateFile: function (p) { return WASM_BASE + p; }
-    });
+    // extraConfig 可用于覆盖 Module 的 print / printErr 等（可选）
+    const config = Object.assign(
+      { locateFile: function (p) { return WASM_BASE + p; } },
+      extraConfig || {}
+    );
+    const inst = await global[factoryName](config);
     _instances[key] = inst;
     return inst;
   }

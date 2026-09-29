@@ -507,6 +507,51 @@
       #model-canvas.pin-pick-mode {
         cursor: crosshair;
       }
+      #seam-pick-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 80, 120, 0.45);
+        background: rgba(255, 80, 120, 0.10);
+        color: #ffc2cf;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+      #seam-pick-btn:hover {
+        background: rgba(255, 80, 120, 0.22);
+      }
+      #seam-pick-btn.active {
+        background: #ff3b6b;
+        border-color: #ff7a9c;
+        color: #ffffff;
+      }
+      #seam-clear-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+        border-radius: 6px;
+        border: 1px solid rgba(106, 132, 255, 0.35);
+        background: rgba(106, 132, 255, 0.10);
+        color: #c6d1f4;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+      #seam-clear-btn:hover {
+        background: rgba(106, 132, 255, 0.22);
+      }
+      #model-canvas.seam-pick-mode {
+        cursor: crosshair;
+      }
+      #seam-trunk-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+        border-radius: 6px;
+        background: rgba(25, 184, 134, 0.18);
+        color: #c6f1e0;
+        border: 1px solid rgba(25, 184, 134, 0.5);
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+      #seam-trunk-btn:hover { background: rgba(25, 184, 134, 0.32); }
       #arap-chart-btn {
         padding: 5px 12px;
         font-size: 12px;
@@ -632,6 +677,18 @@
           </div>
         </fieldset>
 
+        <!-- 切割线 (Seam) 选择：按 C 进入选边模式 -->
+        <fieldset id="seam-panel" style="border:1px solid rgba(255,80,120,0.38);border-radius:10px;padding:8px 12px;margin:0;background:rgba(48,22,32,0.55);">
+          <legend style="color:#ff6b8a;font-size:11px;padding:0 6px;">切割线 (Seam)</legend>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;">
+            <button id="seam-pick-btn" type="button" title="进入后按住左键拖动绘制切割线、右键拖动擦除（快捷键 C）">选切割边 (C)</button>
+            <button id="seam-trunk-btn" type="button" title="对已选切割边做环路抽取：剔除挂在环路外的杂边/噪声边，只保留环路">抽取主干</button>
+            <button id="seam-clear-btn" type="button" title="清空所有已选切割边及其保存记录">清空</button>
+            <span id="seam-count" style="font-size:12px;color:#c6d1f4;">已选 0 条</span>
+            <span style="font-size:11px;color:#8a9dd4;">（自动保存；S 回退一步）</span>
+          </div>
+        </fieldset>
+
         <!-- 固定算法参数区（始终可见） -->
         <fieldset id="param-panel" style="border:1px solid rgba(255,180,70,0.35);border-radius:10px;padding:8px 12px;margin:0;background:rgba(20,25,45,0.7);">
           <legend style="color:#ffb446;font-size:11px;padding:0 6px;">算法参数</legend>
@@ -751,7 +808,7 @@
     (function () {
       // Indexed from window.ALGO_MODELS_DIR (via _data/algo_demos.yml)
       const MODELS_DIR = (window.ALGO_MODELS_DIR || "assets/Models").replace(/^\/+|\/+$/g, "");
-      const FALLBACK_MODEL_FILES = ['beetle_F2052.obj', 'bunnyhead_F3000.obj', 'camelhead_F22704.obj', 'cathead_F248.obj', 'hand_F3769.obj', 'hand_1_i_F4999.obj', 'hemi.obj', 'hencky_F20000.obj', 'max_F3599.obj', 'Nefertiti_face.obj', 'spot_cowhead_F9024.obj'];
+      const FALLBACK_MODEL_FILES = ['beetle_F2052.obj', 'bunnyhead_F3000.obj', 'camelhead_F22704.obj', 'cathead_F248.obj', 'double-torus_F6144.obj', 'elephant.obj', 'hand_1_i_F4999.obj', 'hand_F3769.obj', 'hemi.obj', 'hencky_F20000.obj', 'max_F3599.obj', 'Nefertiti_face.obj', 'spot_cowhead_F9024.obj'];
       const SOURCE_MODEL_FILES = (Array.isArray(window.ALGO_MODEL_FILES) && window.ALGO_MODEL_FILES.length
         ? window.ALGO_MODEL_FILES
         : FALLBACK_MODEL_FILES).filter(function (name) { return /\.obj$/i.test(name); });
@@ -853,6 +910,7 @@
       let currentMeshData = null;
       let currentSourcePath = "";
       let currentUnwrapUv = null;
+      let currentSolveMesh = null;      // 实际用于求解/UV 展示的网格（有切割线时为切割后的网格）
       let textureEnabled = false;
       let currentTexturedMesh = null;
       let checkerTexture = null;
@@ -870,6 +928,20 @@
       const PIN_PICK_COLOR = 0x36e0a0;
       const pinRaycaster = new THREE.Raycaster();
       const pinPointer = new THREE.Vector2();
+
+      // ==================== 切割线 (Seam) 状态 ====================
+      const SEAM_COLOR = 0xff3b6b;      // 切割线高亮颜色
+      const SEAM_PICK_MAX_PX = 15;      // 拾取边的最大屏幕距离(px)：太远则不算命中，避免误选
+      let seamEdges = new Set();        // 已选切割边：键 "min_max"（原始顶点索引）
+      let seamPickMode = false;         // 是否处于选切割边模式（按 C 切换）
+      let seamOverlay = null;           // 3D 视图中的切割线高亮覆盖层（LineSegments）
+      let seamPaint = null;             // 拖动选边会话：{button, x, y, moved, before, firstKey, firstWasSelected}
+      let seamHistory = [];             // 选边历史：每项为该步操作前的 seamEdges 快照（按 S 回退）
+      const SEAM_HISTORY_MAX = 100;     // 历史栈上限
+      let seamEdgeIndex = null;         // 顶点 -> 关联边 索引（按屏幕距离精确拾取用）
+      let origVertexMap = null;         // 世界坐标 -> 原始顶点索引 缓存
+      const seamRaycaster = new THREE.Raycaster();
+      const seamPointer = new THREE.Vector2();
 
       function setStatus(message, color) {
         statusText.textContent = message;
@@ -922,6 +994,12 @@
         reloadBtn.disabled = nextBusy;
         clearBtn.disabled = nextBusy;
         modelSelect.disabled = nextBusy;
+        const seamPickBtnEl = document.getElementById('seam-pick-btn');
+        if (seamPickBtnEl) seamPickBtnEl.disabled = nextBusy;
+        const seamClearBtnEl = document.getElementById('seam-clear-btn');
+        if (seamClearBtnEl) seamClearBtnEl.disabled = nextBusy;
+        const seamTrunkBtnEl = document.getElementById('seam-trunk-btn');
+        if (seamTrunkBtnEl) seamTrunkBtnEl.disabled = nextBusy;
         // 单选框在展开完成前保持禁用
         if (!nextBusy && currentUnwrapUv) {
           if (radioCheckerboard) radioCheckerboard.disabled = false;
@@ -1393,6 +1471,28 @@
       // 因此一旦踩到 trap 就标记为「已污染」，下次求解前丢弃实例重建。
       let wasmPoisoned = false;
 
+      // 求解器读取网格时会按「顶点坐标」判断非流形，对同坐标的重复顶点打印
+      // "Warning: vertex N is nonmanifold." / "... is isolated." 等提示。
+      // 切割线（seam）本身就是把同坐标顶点拆成多份；非流形修复(repairMeshForSolver)
+      // 也会复制同坐标顶点。因此这些提示是预期内的、不影响求解结果，这里统一过滤，
+      // 避免控制台被刷屏；其它 stderr 信息（含真正的错误）照常输出。
+      let _solverBenignWarned = false;
+      function _solverPrint(text) {
+        console.log(text);
+      }
+      function _solverPrintErr(text) {
+        if (typeof text === 'string' && /^\s*Warning: vertex \d+ is (?:nonmanifold|isolated)\b/.test(text)) {
+          if (!_solverBenignWarned) {
+            _solverBenignWarned = true;
+            console.info('[UV] 求解器提示：网格存在同坐标的重复顶点（切割线 / 非流形修复的正常结果），' +
+              '已忽略对应的 nonmanifold 警告。');
+          }
+          return;
+        }
+        console.error(text);
+      }
+      const SOLVER_MODULE_CONFIG = { print: _solverPrint, printErr: _solverPrintErr };
+
       async function initSimpleSolver() {
         if (wasmPoisoned) {
           console.warn('WASM 实例此前发生内存越界，已丢弃并重新创建');
@@ -1407,7 +1507,7 @@
           if (typeof UvUnwrapSimpleSolver === 'undefined') {
             throw new Error('WASM 胶水代码未加载，请确保 assets/wasm/uv_unwrap_simple.js 已部署');
           }
-          simpleInstance = await UvUnwrapSimpleSolver();
+          simpleInstance = await UvUnwrapSimpleSolver(SOLVER_MODULE_CONFIG);
           wasmReady = true;
           console.log('WASM uv_unwrap_simple (LSCM/Tutte/SCP/ARAP) 加载成功');
           return true;
@@ -1647,11 +1747,15 @@
       // ==================== WASM 驱动的 LSCM 求解 ====================
 
       async function solveLSCMAsync(meshData, onProgress) {
+        const inputMesh = meshData;
         const repair = repairMeshForSolver(meshData);
         if (repair.edgeSplits > 0 || repair.vertexSplits > 0) {
           meshData = repair.meshData;
-          currentMeshData = meshData;
-          currentCustomAnchors = null;
+          // 仅当求解对象就是当前显示网格时才回写，避免逐分量求解时覆盖全局状态
+          if (inputMesh === currentMeshData) {
+            currentMeshData = meshData;
+            currentCustomAnchors = null;
+          }
           setStatus("已修复非流形结构，继续执行 LSCM...", "#ffd38a");
         }
         const vertices = meshData.positions;
@@ -1754,7 +1858,7 @@
 
         if (onProgress) onProgress(faces.length, faces.length);
 
-        return { uv: uv, anchors: anchors, flippedFaceCount: countFlippedFaces(uv, faces), timeMs: result.time_ms || 0, method: 'lscm', pinInfo: anchors[0] + " & " + anchors[1] };
+        return { uv: uv, anchors: anchors, flippedFaceCount: countFlippedFaces(uv, faces), timeMs: result.time_ms || 0, method: 'lscm', pinInfo: anchors[0] + " & " + anchors[1], meshData: meshData };
       }
 
       // ==================== WASM 驱动的 Tutte 求解 ====================
@@ -1776,7 +1880,7 @@
         if (bdLscmFailed) return false;
         try {
           if (!bdLscmPromise) {
-            bdLscmPromise = WasmLoader.loadWasmModule('bd_lscm', 'BD_LSCMModule');
+            bdLscmPromise = WasmLoader.loadWasmModule('bd_lscm', 'BD_LSCMModule', SOLVER_MODULE_CONFIG);
           }
           bdLscmInst = await bdLscmPromise;
           bdLscmReady = true;
@@ -1842,6 +1946,7 @@
           flippedFaceCount: countFlippedFaces(uv, f),
           timeMs: ms,
           method: 'bd_lscm',
+          meshData: meshData,
           pinInfo: anchors[0] + ' & ' + anchors[1],
           details: 'Kmax=' + result.max_distortion.toFixed(3) +
                    ' Jmin=' + result.min_jacobian.toFixed(4) +
@@ -2216,7 +2321,8 @@
             flippedFaceCount: countFlippedFaces(uv, faces),
             timeMs: timeMs,
             method: methodName,
-            iterHistory: iterHistory
+            iterHistory: iterHistory,
+            meshData: meshData
           };
         } finally {
           simpleInstance._free(posPtr);
@@ -2455,18 +2561,91 @@
         currentPickPreview = null;
       }
 
+      const SEAM_PAINT_MOVE_PX = 4;   // 判定为「拖动选边」的位移阈值(px)
+
       function onModelPointerDown(e) {
-        if (busy || !pinPickMode || e.button !== 0) { pinPointerDownInfo = null; return; }
-        pinPointerDownInfo = { x: e.clientX, y: e.clientY };
+        const pickActive = pinPickMode || seamPickMode;
+        if (busy || !pickActive || (e.button !== 0 && e.button !== 2)) {
+          pinPointerDownInfo = null; return;
+        }
+        pinPointerDownInfo = { x: e.clientX, y: e.clientY, button: e.button };
+
+        if (!seamPickMode) return;
+        // 进入「拖动选边」会话：左键=绘制(添加)，右键=擦除(取消)。
+        // 拖动期间禁用相机旋转/平移，避免与画线冲突。
+        const key = seamEdgeKeyAt(e);
+        seamPaint = {
+          button: e.button, x: e.clientX, y: e.clientY, moved: false, weCaptured: false,
+          before: Array.from(seamEdges),   // 本步操作前的快照，松开时若发生变化则记入历史
+          firstKey: key || null,
+          firstWasSelected: !!(key && seamEdges.has(key))
+        };
+        if (controls) controls.enabled = false;
+        // OrbitControls 通常已捕获指针；仅在我们自己捕获时才负责释放，避免重复释放报错
+        try {
+          if (!(modelCanvas.hasPointerCapture && modelCanvas.hasPointerCapture(e.pointerId))) {
+            modelCanvas.setPointerCapture(e.pointerId);
+            seamPaint.weCaptured = true;
+          }
+        } catch (err) { /* ignore */ }
+        if (key) {
+          applySeamEdge(key, e.button === 0 ? 'add' : 'remove');
+          setStatus('切割线模式：' + (e.button === 0 ? '绘制中' : '擦除中') +
+            '（共 ' + seamEdges.size + ' 条），松开结束', '#ff9db3');
+        } else {
+          setStatus('切割线模式：请靠近某条边再点击或拖动（共 ' + seamEdges.size + ' 条）', '#ff9db3');
+        }
+      }
+
+      function onModelPointerMove(e) {
+        if (!seamPaint || !seamPickMode) return;
+        const dx = e.clientX - seamPaint.x, dy = e.clientY - seamPaint.y;
+        if (!seamPaint.moved && (dx * dx + dy * dy) > SEAM_PAINT_MOVE_PX * SEAM_PAINT_MOVE_PX) {
+          seamPaint.moved = true;
+        }
+        if (!seamPaint.moved) return;
+        const key = seamEdgeKeyAt(e);
+        if (!key) return;
+        // 拖动只做单向操作（避免来回经过同一条边时反复切换）
+        applySeamEdge(key, seamPaint.button === 0 ? 'add' : 'remove');
       }
 
       function onModelPointerUp(e) {
         const info = pinPointerDownInfo;
         pinPointerDownInfo = null;
-        if (busy || !pinPickMode || e.button !== 0 || !info) return;
-        const dx = e.clientX - info.x, dy = e.clientY - info.y;
-        if (dx * dx + dy * dy > 25) return;   // 判定为旋转拖拽而非点击
-        pickPinVertexAt(e);
+
+        if (seamPaint && seamPickMode) {
+          const sp = seamPaint;
+          seamPaint = null;
+          if (controls) controls.enabled = true;
+          if (sp.weCaptured) {
+            try { modelCanvas.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+          }
+          if (!sp.moved && sp.button === 0 && sp.firstKey && sp.firstWasSelected) {
+            // 左键单击「已选中的边」→ 切换为取消
+            applySeamEdge(sp.firstKey, 'remove');
+          }
+          if (!sp.moved && sp.button === 2 && sp.firstKey && !sp.firstWasSelected) {
+            setStatus('切割线模式：该边未被选中（右键用于擦除已选中的切割边）', '#ff9db3');
+            return;
+          }
+          // 本步若真的改变了选边，则记入历史并落盘（一次点击/一次拖动 = 一步）
+          if (sp.before && !sameSeamSet(sp.before)) {
+            pushSeamHistory(sp.before);
+            saveSeamEdges();
+          }
+          setStatus('切割线模式：共 ' + seamEdges.size +
+            ' 条（拖动绘制/擦除，S 回退，按 C 退出）', '#ff9db3');
+          return;
+        }
+
+        if (busy || !info || e.button !== info.button) return;
+        if (e.button !== 0) return;
+        if (pinPickMode) {
+          const dx = e.clientX - info.x, dy = e.clientY - info.y;
+          if (dx * dx + dy * dy > 25) return;   // 判定为旋转拖拽而非点击
+          pickPinVertexAt(e);
+        }
       }
 
       function pickPinVertexAt(e) {
@@ -2534,6 +2713,607 @@
         p.fromBufferAttribute(posAttr, bestVi).applyMatrix4(m);
         const idx = pinVertexMap ? pinVertexMap.get(vertexKeyFromXYZ(p.x, p.y, p.z)) : undefined;
         return (idx === undefined) ? nearestVertexIndex(p.x, p.y, p.z) : idx;
+      }
+
+
+      // ==================== 切割线 (Seam) 选择与网格切割 ====================
+      function seamEdgeKey(a, b) { return a < b ? a + '_' + b : b + '_' + a; }
+
+      /** 构建/复用「世界坐标 -> 原始顶点索引」映射 */
+      function getOrigVertexMap() {
+        if (origVertexMap) return origVertexMap;
+        origVertexMap = buildVertexIndexMap();
+        return origVertexMap;
+      }
+
+      /** 由射线命中面解析出该三角形的 3 个原始顶点索引 */
+      function hitFaceOriginalIndices(hit) {
+        if (!hit || !hit.face) return null;
+        const geom = hit.object && hit.object.geometry;
+        const posAttr = geom && geom.attributes ? geom.attributes.position : null;
+        if (!posAttr) return null;
+        const m = hit.object.matrixWorld;
+        const p = new THREE.Vector3();
+        const vmap = getOrigVertexMap();
+        const corners = [hit.face.a, hit.face.b, hit.face.c];
+        const out = [];
+        for (let i = 0; i < 3; i++) {
+          const li = corners[i];
+          if (li == null || li < 0 || li >= posAttr.count) return null;
+          p.fromBufferAttribute(posAttr, li).applyMatrix4(m);
+          let idx = vmap.get(vertexKeyFromXYZ(p.x, p.y, p.z));
+          if (idx === undefined) idx = nearestVertexIndex(p.x, p.y, p.z);
+          if (idx < 0) return null;
+          out.push(idx);
+        }
+        return out;
+      }
+
+      /** 重建 3D 视图中的切割线高亮覆盖层，并刷新计数 */
+      function rebuildSeamOverlay() {
+        if (seamOverlay && seamOverlay.parent) seamOverlay.parent.remove(seamOverlay);
+        seamOverlay = null;
+        const countEl = document.getElementById('seam-count');
+        if (countEl) countEl.textContent = '已选 ' + seamEdges.size + ' 条';
+        if (!currentModelGroup || !currentMeshData || seamEdges.size === 0) return;
+
+        const P = currentMeshData.positions;
+        const segs = [];
+        seamEdges.forEach(function (key) {
+          const parts = key.split('_');
+          const a = parseInt(parts[0], 10), b = parseInt(parts[1], 10);
+          const pa = P[a], pb = P[b];
+          if (!pa || !pb) return;
+          segs.push(pa[0], pa[1], pa[2], pb[0], pb[1], pb[2]);
+        });
+        if (segs.length === 0) return;
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(segs, 3));
+        seamOverlay = new THREE.LineSegments(
+          geom,
+          new THREE.LineBasicMaterial({ color: SEAM_COLOR, depthTest: false, transparent: true })
+        );
+        seamOverlay.renderOrder = 10;
+        currentModelGroup.add(seamOverlay);
+      }
+
+      /** 进入/退出切割边选择模式（按 C 或点击按钮） */
+      function toggleSeamPickMode() {
+        if (busy) { setStatus('正在计算，请稍候再选择切割线', '#ffd38a'); return; }
+        if (!currentMeshData || !currentModelGroup) { setStatus('请先加载模型', '#ffd38a'); return; }
+        if (seamPickMode) { exitSeamPickMode(); return; }
+        if (pinPickMode) exitPinPickMode(false);   // 与 pin 选点模式互斥
+        seamPickMode = true;
+        getOrigVertexMap();
+        buildSeamEdgeIndex();
+        setSeamPickUI(true);
+        rebuildSeamOverlay();
+        setStatus('切割线模式：按住左键拖动绘制切割线，右键拖动擦除，S 回退（已选 ' + seamEdges.size + ' 条），再次按 C 退出', '#ff9db3');
+      }
+
+      function exitSeamPickMode() {
+        seamPickMode = false;
+        if (seamPaint) { seamPaint = null; if (controls) controls.enabled = true; }
+        setSeamPickUI(false);
+        setStatus(seamEdges.size > 0
+          ? '已选 ' + seamEdges.size + ' 条切割边，点击「展开」按切割后的网格进行参数化'
+          : '已退出切割线模式', '#8cc4ff');
+      }
+
+      function setSeamPickUI(active) {
+        const btn = document.getElementById('seam-pick-btn');
+        if (btn) { btn.textContent = active ? '结束选边 (C)' : '选切割边 (C)'; btn.classList.toggle('active', active); }
+        if (modelCanvas) modelCanvas.classList.toggle('seam-pick-mode', active);
+        const hint = document.getElementById('model-panel-hint');
+        if (hint) hint.textContent = active ? '左键拖动绘制 / 右键擦除，S 回退' : '拖拽旋转 / 滚轮缩放';
+      }
+
+      /** 建立「顶点 -> 关联边」索引，用于按屏幕距离精确拾取边 */
+      function buildSeamEdgeIndex() {
+        const m = new Map();
+        if (!currentMeshData || !currentMeshData.faces) { seamEdgeIndex = m; return; }
+        const F = currentMeshData.faces;
+        const seen = new Set();
+        for (let fi = 0; fi < F.length; fi++) {
+          const f = F[fi];
+          for (let k = 0; k < 3; k++) {
+            const a = f[k], b = f[(k + 1) % 3];
+            const key = seamEdgeKey(a, b);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const rec = { key: key, a: Math.min(a, b), b: Math.max(a, b) };
+            if (!m.has(a)) m.set(a, []);
+            if (!m.has(b)) m.set(b, []);
+            m.get(a).push(rec);
+            m.get(b).push(rec);
+          }
+        }
+        seamEdgeIndex = m;
+      }
+
+      /** 世界坐标 -> 画布像素坐标 */
+      function projectToScreen(p, rect) {
+        const v = new THREE.Vector3(p[0], p[1], p[2]).project(modelCamera);
+        return {
+          x: (v.x * 0.5 + 0.5) * rect.width + rect.left,
+          y: (-v.y * 0.5 + 0.5) * rect.height + rect.top
+        };
+      }
+
+      /** 点到 2D 线段的最短距离平方（屏幕像素） */
+      function distPointSeg2D(px, py, a, b) {
+        const abx = b.x - a.x, aby = b.y - a.y;
+        const apx = px - a.x, apy = py - a.y;
+        const len2 = abx * abx + aby * aby;
+        let t = len2 > 1e-9 ? (apx * abx + apy * aby) / len2 : 0;
+        t = Math.max(0, Math.min(1, t));
+        const dx = apx - t * abx, dy = apy - t * aby;
+        return dx * dx + dy * dy;
+      }
+
+      /**
+       * 拾取当前指针下最近的一条边。
+       * 以**屏幕像素距离**判定：候选取命中三角形三个顶点上的所有边，按像素距离取最近，
+       * 且必须落在阈值 SEAM_PICK_MAX_PX 之内。这样只有真正靠近某条边时才会命中，
+       * 从根源上避免「拖动划过面中部却误选到旁边不相关的边」。
+       * @returns {?string} 边 key；未达到命中条件返回 null
+       */
+      function seamEdgeKeyAt(e) {
+        if (!currentModelGroup || !currentMeshData) return null;
+        const rect = modelCanvas.getBoundingClientRect();
+        if (rect.width < 1 || rect.height < 1) return null;
+        seamPointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        seamPointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        currentModelGroup.updateMatrixWorld(true);
+        modelCamera.updateMatrixWorld();
+        const meshes = [];
+        currentModelGroup.traverse(function (o) { if (o.isMesh && o.geometry) meshes.push(o); });
+        if (meshes.length === 0) return null;
+
+        seamRaycaster.setFromCamera(seamPointer, modelCamera);
+        const hits = seamRaycaster.intersectObjects(meshes, false);
+        if (hits.length === 0) return null;
+
+        const vi = hitFaceOriginalIndices(hits[0]);
+        if (!vi) return null;
+        if (!seamEdgeIndex) buildSeamEdgeIndex();
+
+        // 候选：命中三角形三个顶点上的所有边（去重）
+        const cands = [];
+        const seen = new Set();
+        for (let i = 0; i < 3; i++) {
+          const list = seamEdgeIndex.get(vi[i]);
+          if (!list) continue;
+          for (let j = 0; j < list.length; j++) {
+            if (seen.has(list[j].key)) continue;
+            seen.add(list[j].key);
+            cands.push(list[j]);
+          }
+        }
+        if (cands.length === 0) return null;
+
+        const P = currentMeshData.positions;
+        let bestKey = null, bestD = Infinity;
+        for (let i = 0; i < cands.length; i++) {
+          const rec = cands[i];
+          const sa = projectToScreen(P[rec.a], rect);
+          const sb = projectToScreen(P[rec.b], rect);
+          const d = distPointSeg2D(e.clientX, e.clientY, sa, sb);
+          if (d < bestD) { bestD = d; bestKey = rec.key; }
+        }
+        return (bestD <= SEAM_PICK_MAX_PX * SEAM_PICK_MAX_PX) ? bestKey : null;
+      }
+
+      /**
+       * 改变一条边的 seam 状态并刷新高亮。
+       * @param {string} key
+       * @param {'toggle'|'add'|'remove'} mode
+       * @returns {boolean} 状态是否真的发生了变化
+       */
+      function applySeamEdge(key, mode) {
+        const selected = seamEdges.has(key);
+        if (mode === 'add' && selected) return false;
+        if (mode === 'remove' && !selected) return false;
+        if (mode === 'remove' || (mode === 'toggle' && selected)) seamEdges.delete(key);
+        else seamEdges.add(key);
+        saveSeamEdges();
+        rebuildSeamOverlay();
+        return true;
+      }
+
+      function clearSeamEdges() {
+        const had = seamEdges.size;
+        if (had > 0) pushSeamHistory(Array.from(seamEdges));
+        seamEdges = new Set();
+        saveSeamEdges();
+        rebuildSeamOverlay();
+        setStatus(had > 0 ? '已清空切割线（含已保存记录，按 S 可回退）' : '当前没有切割线', '#8cc4ff');
+      }
+
+      // ---- 选边结果持久化：按模型分别存入 localStorage，下次自动恢复 ----
+      const SEAM_STORE_PREFIX = 'uvunwrapsimple:seam:';
+      function seamStorageKey() {
+        return SEAM_STORE_PREFIX + (getCurrentModelKey() || 'default');
+      }
+
+      /** 保存当前模型的选边结果（清空时移除记录） */
+      function saveSeamEdges() {
+        if (seamPaint) return;   // 拖动过程中先不写盘，松开时统一保存
+        try {
+          const k = seamStorageKey();
+          if (seamEdges.size === 0) localStorage.removeItem(k);
+          else localStorage.setItem(k, JSON.stringify(Array.from(seamEdges)));
+        } catch (e) { /* localStorage 不可用（隐私模式/配额）时静默忽略 */ }
+      }
+
+      /** 记录一步操作（传入该步操作前的选边快照） */
+      function pushSeamHistory(snapshot) {
+        seamHistory.push(snapshot);
+        if (seamHistory.length > SEAM_HISTORY_MAX) seamHistory.shift();
+      }
+
+      /** 当前选边是否与某个快照一致 */
+      function sameSeamSet(snapshot) {
+        if (snapshot.length !== seamEdges.size) return false;
+        for (let i = 0; i < snapshot.length; i++) {
+          if (!seamEdges.has(snapshot[i])) return false;
+        }
+        return true;
+      }
+
+      /** 按 S 回退上一步选边（一次点击或一次拖动算一步） */
+      function undoSeam() {
+        if (seamHistory.length === 0) {
+          setStatus('没有可回退的选边操作（当前共 ' + seamEdges.size + ' 条）', '#ff9db3');
+          return;
+        }
+        const prev = seamHistory.pop();
+        seamEdges = new Set(prev);
+        saveSeamEdges();
+        rebuildSeamOverlay();
+        setStatus('已回退一步：当前共 ' + seamEdges.size + ' 条（按 S 可继续回退）', '#ff9db3');
+      }
+
+      /**
+       * 恢复当前模型此前保存的选边结果。
+       * 只保留确实存在于该网格上的边，避免模型更换/顶点索引变化产生脏数据。
+       * @returns {number} 实际恢复的边数
+       */
+      function restoreSeamEdges(meshData) {
+        seamEdges = new Set();
+        try {
+          const raw = localStorage.getItem(seamStorageKey());
+          if (!raw) return 0;
+          const arr = JSON.parse(raw);
+          if (!Array.isArray(arr) || arr.length === 0) return 0;
+          const valid = new Set();
+          const F = meshData.faces;
+          for (let fi = 0; fi < F.length; fi++) {
+            const f = F[fi];
+            for (let k = 0; k < 3; k++) valid.add(seamEdgeKey(f[k], f[(k + 1) % 3]));
+          }
+          for (let i = 0; i < arr.length; i++) {
+            const k = arr[i];
+            if (typeof k === 'string' && valid.has(k)) seamEdges.add(k);
+          }
+          return seamEdges.size;
+        } catch (e) { return 0; }
+      }
+
+      // ==================== 抽取主干（切割边环路清理） ====================
+      /**
+       * 抽取主干：把已选切割边里「挂在环路之外的杂边/噪声边」剔除，只保留环路。
+       * 做法：对选边图做 2-core 剪枝——反复删除度 ≤ 1 的端点，
+       * 把所有悬垂的分叉/链剪掉，剩下的就是由环构成的 2-core；
+       * 若剪枝后仍有多条互不相连的环，只保留边数最多的那一条。
+       */
+      function extractSeamTrunk() {
+        if (seamEdges.size === 0) {
+          setStatus('还没有选中的切割边，先按 C 选切割边后再抽取主干', '#ffd38a');
+          return;
+        }
+
+        // 建立无向邻接与边表
+        const adj = new Map();     // 顶点 -> 邻接顶点集合
+        const edges = [];          // [a, b, key]
+        seamEdges.forEach(function (key) {
+          const parts = key.split('_');
+          const a = parseInt(parts[0], 10), b = parseInt(parts[1], 10);
+          if (!adj.has(a)) adj.set(a, new Set());
+          if (!adj.has(b)) adj.set(b, new Set());
+          adj.get(a).add(b);
+          adj.get(b).add(a);
+          edges.push([a, b, key]);
+        });
+
+        // 2-core 剪枝：反复删除度 ≤ 1 的顶点（悬垂分叉/链）
+        const alive = new Set(adj.keys());
+        const queue = [];
+        adj.forEach(function (nbrs, v) { if (nbrs.size <= 1) queue.push(v); });
+        while (queue.length) {
+          const v = queue.pop();
+          if (!alive.has(v)) continue;
+          const nbrs = adj.get(v);
+          if (nbrs.size > 1) continue;
+          alive.delete(v);
+          nbrs.forEach(function (w) {
+            if (!alive.has(w)) return;
+            adj.get(w).delete(v);
+            if (adj.get(w).size <= 1) queue.push(w);
+          });
+          nbrs.clear();
+        }
+
+        // 保留「两端都存活」的边，即构成环路的边
+        let keepKeys = [];
+        for (let i = 0; i < edges.length; i++) {
+          const e = edges[i];
+          if (alive.has(e[0]) && alive.has(e[1])) keepKeys.push(e[2]);
+        }
+
+        if (keepKeys.length === 0) {
+          setStatus('抽取主干：已选切割边没有形成环路（全是分叉/链），无法抽取', '#ffd38a');
+          return;
+        }
+
+        // 若剪枝后仍有多条互不相连的环，只保留边数最多的那条
+        const seen = new Set();
+        let bestComp = null, bestCount = -1;
+        adj.forEach(function (_, s) {
+          if (seen.has(s) || !alive.has(s)) return;
+          const comp = new Set();
+          const stack = [s]; seen.add(s);
+          while (stack.length) {
+            const v = stack.pop(); comp.add(v);
+            adj.get(v).forEach(function (w) { if (alive.has(w) && !seen.has(w)) { seen.add(w); stack.push(w); } });
+          }
+          let cnt = 0;
+          for (let i = 0; i < keepKeys.length; i++) {
+            const p = keepKeys[i].split('_');
+            if (comp.has(parseInt(p[0], 10)) && comp.has(parseInt(p[1], 10))) cnt++;
+          }
+          if (cnt > bestCount) { bestCount = cnt; bestComp = comp; }
+        });
+        if (bestComp && bestCount < keepKeys.length) {
+          keepKeys = keepKeys.filter(function (k) {
+            const p = k.split('_');
+            return bestComp.has(parseInt(p[0], 10)) && bestComp.has(parseInt(p[1], 10));
+          });
+        }
+
+        const removed = seamEdges.size - keepKeys.length;
+        if (removed <= 0) {
+          setStatus('抽取主干：已选切割边本身就是一个干净环路（' + keepKeys.length + ' 条），无需剔除', '#8cc4ff');
+          return;
+        }
+        pushSeamHistory(Array.from(seamEdges));   // 记为一步，S 可回退
+        seamEdges = new Set(keepKeys);
+        saveSeamEdges();
+        rebuildSeamOverlay();
+        setStatus('抽取主干：保留环路 ' + keepKeys.length + ' 条，剔除环路外杂边/噪声边 ' + removed + ' 条（按 S 可回退）', '#ff9db3');
+      }
+
+      /**
+       * 沿 seam 边切断三角网格。
+       * 对每个面的每个角建立并查集节点；对每条「非 seam」内部边，焊接其两侧面在该边
+       * 两端点上的角；seam 边不焊接 → 成为新边界，缝两侧顶点各得一份副本。
+       * 若 seam 能把曲面切开，得到的就是带边界的拓扑圆盘，可直接参数化。
+       * @returns {{positions:number[][], faces:number[][], origOfNew:number[], newIndexOfOrig:number[]}}
+       */
+      function cutMeshAlongSeam(meshData, seamSet) {
+        const P = meshData.positions, F = meshData.faces;
+        const nCorner = F.length * 3;
+        const parent = new Int32Array(nCorner);
+        for (let i = 0; i < nCorner; i++) parent[i] = i;
+        function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+        function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent[rb] = ra; }
+        function cornerOf(fi, v) {
+          for (let k = 0; k < 3; k++) if (F[fi][k] === v) return fi * 3 + k;
+          return -1;
+        }
+
+        // 收集每条无向边及其两侧的角
+        const edgeMap = new Map();
+        for (let fi = 0; fi < F.length; fi++) {
+          for (let k = 0; k < 3; k++) {
+            const a = F[fi][k], b = F[fi][(k + 1) % 3];
+            const key = seamEdgeKey(a, b);
+            let rec = edgeMap.get(key);
+            if (!rec) { rec = { sides: [] }; edgeMap.set(key, rec); }
+            rec.sides.push([fi, k]);
+          }
+        }
+        edgeMap.forEach(function (rec, key) {
+          if (seamSet.has(key)) return;          // seam 边：切开，不焊接
+          if (rec.sides.length !== 2) return;    // 边界 / 非流形：不处理
+          const f0 = rec.sides[0][0], f1 = rec.sides[1][0], k0 = rec.sides[0][1];
+          const va = F[f0][k0], vb = F[f0][(k0 + 1) % 3];
+          const c0a = cornerOf(f0, va), c1a = cornerOf(f1, va);
+          const c0b = cornerOf(f0, vb), c1b = cornerOf(f1, vb);
+          if (c0a >= 0 && c1a >= 0) union(c0a, c1a);
+          if (c0b >= 0 && c1b >= 0) union(c0b, c1b);
+        });
+
+        const rootToNew = new Map();
+        const positions = [], origOfNew = [];
+        const newIndexOfOrig = new Array(P.length).fill(-1);
+        const newFaces = [];
+        for (let fi = 0; fi < F.length; fi++) {
+          const tri = [];
+          for (let k = 0; k < 3; k++) {
+            const root = find(fi * 3 + k);
+            let ni = rootToNew.get(root);
+            if (ni === undefined) {
+              ni = positions.length;
+              rootToNew.set(root, ni);
+              const orig = F[fi][k];
+              positions.push([P[orig][0], P[orig][1], P[orig][2]]);
+              origOfNew.push(orig);
+              if (newIndexOfOrig[orig] < 0) newIndexOfOrig[orig] = ni;
+            }
+            tri.push(ni);
+          }
+          newFaces.push(tri);
+        }
+        return { positions: positions, faces: newFaces, origOfNew: origOfNew, newIndexOfOrig: newIndexOfOrig };
+      }
+
+      // ==================== 连通分量拆分与逐分量展开 ====================
+      /**
+       * 按「共享边」把三角网格拆成若干连通分量。
+       * 切割线把曲面切成多块时，每块是一条独立的带边界曲面，需要分别参数化。
+       * @returns {Array<{positions:number[][], faces:number[][], localToGlobal:number[], globalFaceIds:number[]}>}
+       */
+      function splitMeshIntoComponents(meshData) {
+        const F = meshData.faces, P = meshData.positions;
+        const nF = F.length;
+        const parent = new Int32Array(nF);
+        for (let i = 0; i < nF; i++) parent[i] = i;
+        function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+        function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent[rb] = ra; }
+
+        const edgeOwner = new Map();
+        for (let fi = 0; fi < nF; fi++) {
+          for (let k = 0; k < 3; k++) {
+            const key = seamEdgeKey(F[fi][k], F[fi][(k + 1) % 3]);
+            const owner = edgeOwner.get(key);
+            if (owner === undefined) edgeOwner.set(key, fi);
+            else union(fi, owner);
+          }
+        }
+
+        const groups = new Map();
+        for (let fi = 0; fi < nF; fi++) {
+          const r = find(fi);
+          let list = groups.get(r);
+          if (!list) { list = []; groups.set(r, list); }
+          list.push(fi);
+        }
+
+        const comps = [];
+        groups.forEach(function (faceIds) {
+          const g2l = new Map();
+          const positions = [], faces = [], localToGlobal = [];
+          for (let i = 0; i < faceIds.length; i++) {
+            const fi = faceIds[i];
+            const tri = [];
+            for (let k = 0; k < 3; k++) {
+              const g = F[fi][k];
+              let l = g2l.get(g);
+              if (l === undefined) {
+                l = positions.length;
+                g2l.set(g, l);
+                positions.push(P[g]);
+                localToGlobal.push(g);
+              }
+              tri.push(l);
+            }
+            faces.push(tri);
+          }
+          comps.push({ positions: positions, faces: faces, localToGlobal: localToGlobal, globalFaceIds: faceIds });
+        });
+
+        // 大分量排在前面，展示更稳定
+        comps.sort(function (a, b) { return b.faces.length - a.faces.length; });
+        return comps;
+      }
+
+      /** 按当前算法对单个网格求解（逐分量展开时对每块调用） */
+      async function solveMeshByMethod(mesh, method) {
+        if (method === 'bd_lscm') return await solveBDLscmAsync(mesh, function () {});
+        if (method === 'scp') return await solveSCPAsync(mesh, function () {});
+        if (method === 'arap') {
+          const r = await solveARAPAsync(mesh, getARAPIterations(),
+            getArapInitBoundaryCode(), getArapInitWeightCode(), function () {});
+          r.maxIter = getARAPIterations();
+          return r;
+        }
+        if (method === 'abf') {
+          const t = getABFType();
+          return await (t === 'linabf' ? solveLinABFAsync(mesh, function () {})
+                                       : solveABFPPAsync(mesh, function () {}));
+        }
+        return await solveLSCMAsync(mesh, function () {});
+      }
+
+      /**
+       * 逐分量展开：每个连通分量单独求解，归一化到各自单位矩形后，
+       * 按网格(⌈√k⌉ 列)排布拼进同一张 UV 图，块与块互不重叠。
+       * 同一块的「Tutte 初始 UV / 优化后 UV」共用同一变换，保证可叠合比较。
+       */
+      async function solveComponentsMerged(comps, solveMesh, method) {
+        const k = comps.length;
+        const cols = Math.ceil(Math.sqrt(k));
+        const rows = Math.ceil(k / cols);
+        const pad = 0.05;
+
+        const nV = solveMesh.positions.length;
+        const uv = new Array(nV);
+        const initUv = new Array(nV);
+        let hasInit = false;
+        const anchors = [];
+        let timeMs = 0;
+        let iterHistory = null;
+
+        for (let ci = 0; ci < k; ci++) {
+          const c = comps[ci];
+          const res = await solveMeshByMethod({ positions: c.positions, faces: c.faces }, method);
+          timeMs += (res.timeMs || 0);
+          if (ci === 0 && res.iterHistory && res.iterHistory.length) iterHistory = res.iterHistory;
+
+          const subInit = (res.initUv && res.initUv.length === res.uv.length) ? res.initUv : null;
+          if (subInit) { _normalizeUvPair(res.uv, subInit); hasInit = true; }
+          else { _normalizeUvBox(res.uv); }
+
+          // 归一化后 min 为 0，取该块包围盒最大值以便在格子里居中
+          let maxU = 0, maxV = 0;
+          for (let l = 0; l < res.uv.length; l++) {
+            const eu = res.uv[l][0], ev = res.uv[l][1];
+            if (eu > maxU) maxU = eu; if (ev > maxV) maxV = ev;
+          }
+          if (subInit) {
+            for (let l = 0; l < subInit.length; l++) {
+              const su = subInit[l][0], sv = subInit[l][1];
+              if (su > maxU) maxU = su; if (sv > maxV) maxV = sv;
+            }
+          }
+          const shiftU = (1 - maxU) / 2, shiftV = (1 - maxV) / 2;
+
+          const col = ci % cols, row = Math.floor(ci / cols);
+          const cw = 1 / cols, ch = 1 / rows;
+          const s = Math.min(cw, ch) * (1 - 2 * pad);
+          const ox = col * cw + (cw - s) / 2;
+          const oy = row * ch + (ch - s) / 2;
+
+          for (let l = 0; l < c.localToGlobal.length; l++) {
+            const g = c.localToGlobal[l];
+            uv[g] = [ox + (res.uv[l][0] + shiftU) * s, oy + (res.uv[l][1] + shiftV) * s];
+            if (subInit) initUv[g] = [ox + (subInit[l][0] + shiftU) * s, oy + (subInit[l][1] + shiftV) * s];
+          }
+
+          if (res.anchors) {
+            for (let i = 0; i < res.anchors.length; i++) anchors.push(c.localToGlobal[res.anchors[i]]);
+          }
+        }
+
+        // 补齐未参与任何面的顶点，避免后续归一化/渲染读到 undefined
+        for (let i = 0; i < nV; i++) {
+          if (!uv[i]) uv[i] = [0, 0];
+          if (hasInit && !initUv[i]) initUv[i] = [0, 0];
+        }
+
+        return {
+          uv: uv,
+          initUv: hasInit ? initUv : null,
+          anchors: anchors,
+          flippedFaceCount: countFlippedFaces(uv, solveMesh.faces),
+          timeMs: timeMs,
+          method: method,
+          iterHistory: iterHistory,
+          meshData: solveMesh,
+          components: k
+        };
       }
 
 
@@ -2713,7 +3493,8 @@
       }
 
       function setTextureDistortionEnabled(enabled, textureMode) {
-        if (enabled && (!currentMeshData || !currentUnwrapUv)) {
+        const texMesh = currentSolveMesh || currentMeshData;
+        if (enabled && (!texMesh || !currentUnwrapUv)) {
           setStatus('请先点击"展开!"生成 UV，再开启纹理贴图', '#ffd38a');
           if (radioCheckerboard) radioCheckerboard.checked = false;
           if (radioDots) radioDots.checked = false;
@@ -2724,7 +3505,7 @@
         if (textureEnabled) {
           currentTextureMode = textureMode || currentTextureMode || "checkerboard";
           clearTexturedMesh();
-          currentTexturedMesh = buildTexturedMesh(currentMeshData, currentUnwrapUv, currentTextureMode);
+          currentTexturedMesh = buildTexturedMesh(texMesh, currentUnwrapUv, currentTextureMode);
           modelScene.add(currentTexturedMesh);
           setModelSolidVisible(false);
           setStatus("已开启纹理贴图（" + (currentTextureMode === "dots" ? "圆点贴图" : "棋盘格贴图") + "）", "#89f0b6");
@@ -2849,6 +3630,17 @@
           if (radioCheckerboard) { radioCheckerboard.checked = false; radioCheckerboard.disabled = true; }
           if (radioDots) { radioDots.checked = false; radioDots.disabled = true; }
 
+          // 切换/重载模型：清空切割线与切割后的求解网格
+          seamPickMode = false;
+          seamEdges = new Set();
+          seamHistory = [];
+          seamOverlay = null;
+          seamPaint = null;
+          seamEdgeIndex = null;
+          origVertexMap = null;
+          currentSolveMesh = null;
+          setSeamPickUI(false);
+
           setStatus("正在提取三角网格...");
           let meshData = collectMeshData(root);
           const repair = repairMeshForSolver(meshData);
@@ -2867,6 +3659,9 @@
 
           currentMeshData = meshData;
           currentSourcePath = resolved.sourcePath;
+          // 恢复该模型上次保存的选边结果（校验后重建高亮）
+          const restoredSeamCount = restoreSeamEdges(meshData);
+          rebuildSeamOverlay();
           currentRawFaces = resolved.rawFaces;
 
           // 换了模型/切了网格，上次的 ARAP 收敛曲线不再对应，清空
@@ -2889,9 +3684,12 @@
           const repairNote = (repair.edgeSplits > 0 || repair.vertexSplits > 0)
             ? " / 已修复非流形结构"
             : "";
+          const seamNote = restoredSeamCount > 0
+            ? "，已恢复 " + restoredSeamCount + " 条切割线（按 C 继续编辑）"
+            : "";
           setStatus(
             "3D 预览: " + getCurrentSourceLabel() + " / " + meshData.positions.length + " 顶点 / " +
-            faceCount + " " + faceType + repairNote + "，点击「开始展开」执行 UV",
+            faceCount + " " + faceType + repairNote + seamNote + "，点击「开始展开」执行 UV",
             "#89f0b6"
           );
         } catch (error) {
@@ -2905,25 +3703,44 @@
       async function updateModel() {
         if (busy) return;
         if (pinPickMode) exitPinPickMode(false);
+        if (seamPickMode) exitSeamPickMode();
 
         if (!currentMeshData) {
           await loadModelPreview();
           if (!currentMeshData) return;
         }
 
+        // 沿已选切割线切开网格（若有）：求解与 UV/纹理展示都基于切割后的网格。
+        // 切割后 seam 成为新边界，可使闭合曲面变成可参数化的圆盘拓扑。
+        let solveMesh = currentMeshData;
+        let seamCutInfo = null;
+        if (seamEdges.size > 0) {
+          seamCutInfo = cutMeshAlongSeam(currentMeshData, seamEdges);
+          solveMesh = { positions: seamCutInfo.positions, faces: seamCutInfo.faces };
+        }
+        currentSolveMesh = solveMesh;
+
         // 本页所有算法都基于"带边界的网格"（圆盘拓扑）。闭合网格会让求解器在
         // 退化系统上工作：历史上会在 Eigen 里产生非法索引，静默越界写坏 WASM 堆，
         // 直到之后某次 free/malloc 才报 "memory access out of bounds"。
         // 所以在进入求解器前先做前置判断，给出可读提示。
         const _methodForCheck = getCurrentMethod();
-        if (isClosedTriangleMesh(currentMeshData)) {
+        if (isClosedTriangleMesh(solveMesh)) {
           if (_methodForCheck === 'lscm' || _methodForCheck === 'bd_lscm') {
             // LSCM 侧对闭合网格做了退化回退（pin 顶点 0 + 最远顶点），允许尝试但先提示
             setStatus("提示：模型是闭合网格，LSCM 结果会明显退化（数学上需要圆盘拓扑）", "#ffd38a");
           } else {
-            setStatus("该算法需要带边界的网格：当前模型是闭合网格，请先切缝或换用带边界的模型", "#ff9d9d");
+            setStatus("该算法需要带边界的网格：当前模型是闭合网格，请先用「切割线」切缝或换用带边界的模型", "#ff9d9d");
             return;
           }
+        }
+
+        // 切割后网格的顶点索引与原始网格不同：把用户的 pin 点映射到切割网格的索引
+        const origCustomAnchors = currentCustomAnchors;
+        if (seamCutInfo && origCustomAnchors && origCustomAnchors.length >= 2) {
+          const m0 = seamCutInfo.newIndexOfOrig[origCustomAnchors[0]];
+          const m1 = seamCutInfo.newIndexOfOrig[origCustomAnchors[1]];
+          currentCustomAnchors = (m0 >= 0 && m1 >= 0 && m0 !== m1) ? [m0, m1] : null;
         }
 
         // UV 重算/更新前，先清理“其他计算”的覆盖层，避免与新模型/新网格混淆
@@ -2948,30 +3765,20 @@
 
         try {
           // const startTime = performance.now();
+          // 按连通分量拆分：切割线把曲面切成多块时，逐块分别展开
+          const comps = splitMeshIntoComponents(solveMesh);
           let unwrapResult;
-          if (method === 'lscm') {
-            unwrapResult = await solveLSCMAsync(currentMeshData, function(/* progress, total */) {
-              // updateTimingProgress(progress, total);
-            });
-          } else if (method === 'bd_lscm') {
-            unwrapResult = await solveBDLscmAsync(currentMeshData, function(/* progress, total */) {});
-          } else if (method === 'scp') {
-            unwrapResult = await solveSCPAsync(currentMeshData, function(/* p, t */) {
-            });
-          } else if (method === 'arap') {
-            unwrapResult = await solveARAPAsync(currentMeshData, getARAPIterations(),
-              getArapInitBoundaryCode(), getArapInitWeightCode(), function(/* p, t */) {
-            });
-            unwrapResult.maxIter = getARAPIterations();
-          } else if (method === 'abf') {
-            const abfType = getABFType();
-            unwrapResult = await (abfType === 'linabf'
-              ? solveLinABFAsync(currentMeshData, function() {})
-              : solveABFPPAsync(currentMeshData, function() {}));
+          if (comps.length <= 1) {
+            unwrapResult = await solveMeshByMethod(solveMesh, method);
+            // 求解器内部可能因修复非流形结构替换了网格：以其实际使用的网格为准
+            if (unwrapResult && unwrapResult.meshData) {
+              solveMesh = unwrapResult.meshData;
+              currentSolveMesh = solveMesh;
+            }
           } else {
-            unwrapResult = await solveLSCMAsync(currentMeshData, function(/* progress, total */) {
-              // updateTimingProgress(progress, total);
-            });
+            setStatus("已切成 " + comps.length + " 个连通分量，逐块执行 " + methodLabel + " 求解...");
+            currentCustomAnchors = null;   // 多分量时每块各自自动选点
+            unwrapResult = await solveComponentsMerged(comps, solveMesh, method);
           }
 
           // const elapsedMs = unwrapResult.timeMs > 0 ? unwrapResult.timeMs : (performance.now() - startTime);
@@ -3010,7 +3817,7 @@
 
           clearGroup(uvScene, currentUvLines);
           clearGroup(uvScene, currentUvPins);
-          const uvVisual = buildUvMesh(unwrapResult.uv, currentMeshData.faces, unwrapResult.anchors, shouldShowPinPoints());
+          const uvVisual = buildUvMesh(unwrapResult.uv, solveMesh.faces, unwrapResult.anchors, shouldShowPinPoints());
           currentUvLines = uvVisual.lines;
           currentUvPins = uvVisual.pins;
           uvScene.add(currentUvLines);
@@ -3020,7 +3827,7 @@
           clearGroup(uvScene, currentUvInitLines);
           currentUvInitLines = null;
           if (currentUvInit) {
-            const initVisual = buildUvMesh(currentUvInit, currentMeshData.faces, unwrapResult.anchors, false);
+            const initVisual = buildUvMesh(currentUvInit, solveMesh.faces, unwrapResult.anchors, false);
             currentUvInitLines = initVisual.lines;
             uvScene.add(currentUvInitLines);
           }
@@ -3043,7 +3850,9 @@
           */
 
           // const color = unwrapResult.flippedFaceCount === 0 ? "#89f0b6" : "#ffd38a";
-          setStatus(methodLabel + " 展开完成", "#89f0b6");
+          const compNote = (unwrapResult.components && unwrapResult.components > 1)
+            ? "（" + unwrapResult.components + " 块分别展开）" : "";
+          setStatus(methodLabel + " 展开完成" + compNote, "#89f0b6");
           /*
           setStatus(
             methodLabel + " 展开完成，翻转面 " + unwrapResult.flippedFaceCount + " 个",
@@ -3055,6 +3864,8 @@
           // hideTiming();
           setStatus("展开失败: " + error.message, "#ff9d9d");
         } finally {
+          // 恢复用户原始（原始网格索引）的 pin 选择
+          currentCustomAnchors = origCustomAnchors;
           setBusy(false);
         }
       }
@@ -3075,7 +3886,21 @@
       reloadBtn.addEventListener("click", updateModel);
       clearBtn.addEventListener("click", clearAndReload);
       modelCanvas.addEventListener("pointerdown", onModelPointerDown);
+      modelCanvas.addEventListener("pointermove", onModelPointerMove);
       modelCanvas.addEventListener("pointerup", onModelPointerUp);
+      modelCanvas.addEventListener("pointercancel", onModelPointerUp);
+      // 选切割边时屏蔽右键菜单，让右键用于擦除
+      modelCanvas.addEventListener("contextmenu", function (e) {
+        if (seamPickMode) e.preventDefault();
+      });
+
+      // 切割线 (Seam)：按钮 + 快捷键 C
+      const seamPickBtn = document.getElementById('seam-pick-btn');
+      if (seamPickBtn) seamPickBtn.addEventListener('click', toggleSeamPickMode);
+      const seamClearBtn = document.getElementById('seam-clear-btn');
+      if (seamClearBtn) seamClearBtn.addEventListener('click', clearSeamEdges);
+      const seamTrunkBtn = document.getElementById('seam-trunk-btn');
+      if (seamTrunkBtn) seamTrunkBtn.addEventListener('click', extractSeamTrunk);
 
       // UV 面板选项卡：Tutte 初始 UV / ARAP 优化后 UV
       const uvTabInitBtn = document.getElementById("uv-tab-init");
@@ -3095,7 +3920,30 @@
         });
       }
       window.addEventListener("keydown", function (e) {
-        if (e.key === "Escape" && isArapModalOpen()) closeArapModal();
+        if (e.key === "Escape") {
+          if (isArapModalOpen()) { closeArapModal(); return; }
+          if (seamPickMode) { exitSeamPickMode(); return; }
+          if (pinPickMode) { exitPinPickMode(false); return; }
+          return;
+        }
+        // 按 C 进入/退出切割边选择模式
+        if (e.key === "c" || e.key === "C") {
+          const tag = (e.target && e.target.tagName) || "";
+          if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+          if (e.ctrlKey || e.metaKey || e.altKey) return;
+          if (isArapModalOpen()) return;
+          e.preventDefault();
+          toggleSeamPickMode();
+          return;
+        }
+        // 选边模式下按 S 回退上一步选边
+        if (seamPickMode && (e.key === "s" || e.key === "S")) {
+          const tag = (e.target && e.target.tagName) || "";
+          if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+          if (e.ctrlKey || e.metaKey || e.altKey) return;
+          e.preventDefault();
+          undoSeam();
+        }
       });
 
       // 纹理显示单选框切换
