@@ -536,18 +536,51 @@
         color: #dbe3fb;
         font-size: 15px;
         line-height: 1.55;
-        pointer-events: none;
+        pointer-events: auto;
         z-index: 5;
       }
       .formula-box[hidden] {
         display: none;
       }
+      .formula-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        cursor: pointer;
+        user-select: none;
+      }
       .formula-title {
         color: #ffb446;
         font-size: 13px;
         letter-spacing: 0.3px;
-        margin-bottom: 8px;
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .formula-toggle {
+        flex: 0 0 auto;
+        width: 20px;
+        height: 20px;
+        line-height: 18px;
+        padding: 0;
+        font-size: 12px;
+        color: #ffb446;
+        background: rgba(255, 180, 70, 0.10);
+        border: 1px solid rgba(255, 180, 70, 0.35);
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .formula-toggle:hover {
+        background: rgba(255, 180, 70, 0.22);
+      }
+      .formula-box.collapsed {
+        padding-bottom: 14px;
+      }
+      .formula-box.collapsed .formula-content {
+        display: none;
       }
       .formula-body {
         overflow-x: auto;
@@ -679,8 +712,13 @@
         <div class="canvas-wrap">
           <canvas id="uv-canvas"></canvas>
           <div class="formula-box" id="uv-formula-box" hidden>
-            <div class="formula-title" id="uv-formula-title"></div>
-            <div class="formula-body" id="uv-formula-body"></div>
+            <div class="formula-head" id="uv-formula-head" title="点击展开 / 收起公式">
+              <span class="formula-title" id="uv-formula-title"></span>
+              <button type="button" class="formula-toggle" id="uv-formula-toggle" aria-label="展开/收起公式">▾</button>
+            </div>
+            <div class="formula-content" id="uv-formula-content">
+              <div class="formula-body" id="uv-formula-body"></div>
+            </div>
           </div>
         </div>
         <div class="footer-note">右侧展示展开后的线框 UV 结果。</div>
@@ -1496,11 +1534,21 @@
         }).catch(function (err) { console.warn('公式排版失败:', err); });
       }
 
+      /** 切换公式面板的展开 / 收起 */
+      function toggleUvFormula() {
+        const box = document.getElementById('uv-formula-box');
+        const btn = document.getElementById('uv-formula-toggle');
+        if (!box) return;
+        const collapsed = box.classList.toggle('collapsed');
+        if (btn) btn.textContent = collapsed ? '▸' : '▾';
+      }
+
       /** 在 UV 面板右上角显示当前算法的核心优化公式 */
       function updateUvFormula(method) {
         const box = document.getElementById('uv-formula-box');
         const titleEl = document.getElementById('uv-formula-title');
         const bodyEl = document.getElementById('uv-formula-body');
+        const btn = document.getElementById('uv-formula-toggle');
         if (!box || !titleEl || !bodyEl) return;
 
         const spec = METHOD_FORMULAS[method];
@@ -1509,6 +1557,9 @@
         titleEl.textContent = spec.title;
         bodyEl.innerHTML = '$$' + spec.tex + '$$' +
           (spec.note ? '<span class="formula-note">' + spec.note + '</span>' : '');
+        // 切换算法时恢复为展开状态，确保新公式可见
+        box.classList.remove('collapsed');
+        if (btn) btn.textContent = '▾';
         box.hidden = false;
         typesetFormulaBox(bodyEl);
       }
@@ -1579,6 +1630,11 @@
       document.querySelectorAll('input[name="arap-init-boundary"], input[name="arap-init-weight"], input[name="abf-type"]').forEach(function(radio) {
         radio.addEventListener('change', onParamChange);
       });
+      // 公式面板：点击标题栏或按钮可展开 / 收起
+      const formulaHead = document.getElementById('uv-formula-head');
+      const formulaToggle = document.getElementById('uv-formula-toggle');
+      if (formulaHead) formulaHead.addEventListener('click', toggleUvFormula);
+      if (formulaToggle) formulaToggle.addEventListener('click', function (e) { e.stopPropagation(); toggleUvFormula(); });
       const arapSlider = document.getElementById('arap-iters-slider');
       if (arapSlider) {
         arapSlider.addEventListener('input', function() {
