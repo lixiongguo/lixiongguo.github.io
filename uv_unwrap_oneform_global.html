@@ -94,9 +94,11 @@
         <button id="tree-btn-step3" class="tree-btn" title="Step 3: 非树非余树边 = 同调基底" disabled>🪓 Step3</button>
         <button id="tree-btn-link" class="tree-btn" style="background:#2a1a3a;border-color:rgba(220,120,240,.4);color:#e0a0f0" title="用生成树边连接同调基底顶点" disabled>🔗</button>
         <button id="tree-btn-auto" class="tree-btn" style="background:#1a2e3a;border-color:rgba(80,200,240,.45);color:#80d8ff" title="自动执行 Step1→Step2→Step3">🚀 一键</button>
+        <button id="tree-btn-seam" class="tree-btn" style="background:#3a1a24;border-color:rgba(240,110,150,.45);color:#ff9db8" title="把 Step3 同调基割边 + Step4 连结边（完整基本环）登记为分割边 seam，并在 3D 视图高亮" disabled>➰ 转seam</button>
         <span style="color:#8aad9a;font-size:11px;">粗细</span>
-        <input type="range" id="tc-thickness" min="5" max="15" value="7" style="width:50px;height:14px;accent-color:#60d060;cursor:pointer;">
+        <input type="range" id="tc-thickness" min="0.25" max="0.75" step="0.05" value="0.5" style="width:50px;height:14px;accent-color:#60d060;cursor:pointer;">
         <span id="tc-info">0 条割边</span>
+        <span id="seam-info" style="display:none;font-size:11px;color:#ffb0c8;margin-left:6px">0 条分割边</span>
       </fieldset>
 
       <fieldset id="texture-radios" style="border:1px solid rgba(106,132,255,0.22);border-radius:10px;padding:6px 10px;margin:0;display:flex;gap:12px;align-items:center;">
@@ -120,7 +122,7 @@
     <section class="panel">
       <div class="panel-header"><span>3D 模型</span><span>拖拽旋转 / 滚轮缩放</span></div>
       <div class="canvas-wrap"><canvas id="model-canvas"></canvas></div>
-      <div class="footer-note">左: 3D 模型。分步展示 Tree-Cotree：<span style="color:#ddbb22;font-weight:700;">金色</span>生成树 → <span style="color:#22ccdd;font-weight:700;">青色</span>余树 → <span style="color:#60e060;font-weight:700;">绿色</span>同调基底割边。</div>
+      <div class="footer-note">左: 3D 模型。分步展示 Tree-Cotree：<span style="color:#ddbb22;font-weight:700;">金色</span>生成树 → <span style="color:#22ccdd;font-weight:700;">青色</span>余树 → <span style="color:#60e060;font-weight:700;">绿色</span>同调基底割边 → <span style="color:#ff6b8a;font-weight:700;">红色</span>登记后的 seam 分割边（完整基本环）。</div>
     </section>
     <section class="panel">
       <div class="panel-header"><span id="uv-panel-label">UV 网格</span><span>边界归一化到 0..1</span></div>
@@ -234,18 +236,23 @@
   let tcCurrView='';
   let tcLinkEdges=[];
   let tcSliceEl=document.getElementById('tc-thickness');
+  let seamEdges=new Set();          // 已登记的分割边 seam：键 "min_max"
+  let seamDisplayGroup=null;        // 3D 视图的 seam 高亮
+  let seamUvGroup=null;             // UV 视图的 seam 高亮（展开后）
 
-  function getTcThickness(){const v=parseInt(tcSliceEl.value)||7;return v/1000;}
+  function getTcThickness(){const v=parseFloat(tcSliceEl.value)||0.5;return v/1000;}
 
   function resetTcState(){
     tcData=null;tcTree=null;tcCotree=null;
     homologyEdges=[];tcLinkEdges=[];tcCurrView='';updateTcInfo();
     clearTcDisplay();
+    clearSeam();
     document.getElementById('tree-btn-step1').disabled=false;
     document.getElementById('tree-btn-step2').disabled=true;
     document.getElementById('tree-btn-step3').disabled=true;
     document.getElementById('tree-btn-link').disabled=true;
     document.getElementById('tree-btn-auto').disabled=false;
+    document.getElementById('tree-btn-seam').disabled=true;
   }
 
   function clearTcDisplay(){
@@ -293,6 +300,8 @@
     }
     tcTree=inTree;tcCotree=null;
     homologyEdges=[];updateTcInfo();
+    clearSeam();   // 同调基被重置，旧 seam 失效
+    document.getElementById('tree-btn-seam').disabled=true;
     tcCurrView='tree';displayTreeEdges(d.edges,inTree,0xddbb22);
     document.getElementById('tree-btn-step1').disabled=true;
     document.getElementById('tree-btn-step2').disabled=false;
@@ -343,6 +352,7 @@
     tcCurrView='homology';displayHomologyBasis(currentMeshData);
     document.getElementById('tree-btn-step3').disabled=true;
     document.getElementById('tree-btn-link').disabled=false;
+    document.getElementById('tree-btn-seam').disabled=false;
     setStatus("Step 3 完成: "+homologyEdges.length+" 条同调基底割边","#89f0b6");
   }
 
@@ -414,6 +424,7 @@
     else if(tcCurrView==='tree+cotree')displayTreePlusCotree(d.edges,tcTree,tcCotree);
     else if(tcCurrView==='homology')displayHomologyBasis(currentMeshData);
     else if(tcCurrView==='homology+link')displayHomologyWithLinks(currentMeshData);
+    if(seamEdges.size>0)displaySeamEdges();
   }
 
   function addCylinderEdge(group,ax,ay,az,bx,by,bz,rGlow,rCore,glowColor,coreColor,glowOpacity,renderBase){
@@ -510,6 +521,83 @@
       coreSphere.position.set(p[0],p[1],p[2]);coreSphere.renderOrder=19;group.add(coreSphere);
     }
     modelScene.add(group);tcDisplayGroup=group;
+  }
+
+  // ============ 分割边 (Seam)：由 Tree-Cotree 完整基本环登记 ============
+  function seamEdgeKey(a,b){return a<b?a+"_"+b:b+"_"+a;}
+
+  /**
+   * 把 tree-cotree 的「完整基本环」登记为分割边 seam：
+   *   seam = homologyEdges (Step3 同调基割边) ∪ tcLinkEdges (Step4 连结树边)，
+   * 与 C++ topology::TreeCotreeBasis::buildCutSeamMesh 的取边方式一致。
+   * 仅作登记 + 3D 高亮；“展开”仍调用现有 Abel–Jacobi（内部自建同调基与割）。
+   */
+  function buildSeamFromTreeCotree(){
+    if(!currentMeshData){setStatus('请先选择模型','#ffd38a');return;}
+    if(!tcTree||homologyEdges.length===0){setStatus('请先执行 Step3（或“一键”）得到同调基割边','#ffd38a');return;}
+    // 完整基本环需要 Step4 的连接树边；尚未连结则自动执行
+    if(tcLinkEdges.length===0)step4LinkLoop();
+    const set=new Set();
+    for(const e of homologyEdges)set.add(seamEdgeKey(e.a,e.b));
+    for(const e of tcLinkEdges)set.add(seamEdgeKey(e.a,e.b));
+    seamEdges=set;
+    displaySeamEdges();
+    updateSeamInfo();
+    setStatus('已登记分割边 seam: '+seamEdges.size+' 条（同调基 '+homologyEdges.length+' + 连结 '+tcLinkEdges.length+' = 完整基本环）。点“展开”执行 Abel–Jacobi 全局共形。','#ff9db3');
+  }
+
+  function updateSeamInfo(){
+    const info=document.getElementById('seam-info');
+    if(!info)return;
+    info.style.display=seamEdges.size>0?'':'none';
+    info.textContent=seamEdges.size+' 条分割边';
+  }
+
+  function displaySeamEdges(){
+    if(seamDisplayGroup){modelScene.remove(seamDisplayGroup);seamDisplayGroup=null;}
+    if(!currentMeshData||seamEdges.size===0)return;
+    // 与 uv-unwrap-simple.html 的 seam 渲染一致：红色 LineSegments，不做发光/粗管高亮
+    const segs=[];
+    seamEdges.forEach(function(k){
+      const p=k.split('_'),a=parseInt(p[0],10),b=parseInt(p[1],10);
+      const pa=currentMeshData.positions[a],pb=currentMeshData.positions[b];
+      if(!pa||!pb)return;
+      segs.push(pa[0],pa[1],pa[2],pb[0],pb[1],pb[2]);
+    });
+    if(segs.length===0)return;
+    const geom=new THREE.BufferGeometry();
+    geom.setAttribute('position',new THREE.Float32BufferAttribute(segs,3));
+    seamDisplayGroup=new THREE.LineSegments(
+      geom,
+      new THREE.LineBasicMaterial({color:0xff3b6b,depthTest:false,transparent:true})
+    );
+    seamDisplayGroup.renderOrder=10;
+    modelScene.add(seamDisplayGroup);
+  }
+
+  function clearSeam(){
+    seamEdges=new Set();
+    if(seamDisplayGroup){modelScene.remove(seamDisplayGroup);seamDisplayGroup=null;}
+    if(seamUvGroup){uvScene.remove(seamUvGroup);seamUvGroup=null;}
+    updateSeamInfo();
+  }
+
+  // 展开后：把 seam 边按顶点 UV 画到右侧 UV 视图，便于与算法内部割对应查看
+  function displaySeamUv(){
+    if(seamUvGroup){uvScene.remove(seamUvGroup);seamUvGroup=null;}
+    if(!currentUnwrapUv||seamEdges.size===0)return;
+    const uv=currentUnwrapUv,sg=[];
+    function tp(p){return[(p[0]-.5)*1.8,(p[1]-.5)*1.8,0]}
+    seamEdges.forEach(function(k){
+      const p=k.split('_'),a=parseInt(p[0],10),b=parseInt(p[1],10);
+      if(!uv[a]||!uv[b])return;
+      const pa=tp(uv[a]),pb=tp(uv[b]);
+      sg.push(pa[0],pa[1],pa[2],pb[0],pb[1],pb[2]);
+    });
+    if(sg.length===0)return;
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(sg,3));
+    seamUvGroup=new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:0xff3b6b,transparent:true,opacity:.95}));
+    seamUvGroup.renderOrder=5;uvScene.add(seamUvGroup);
   }
 
   function updateTcInfo(){
@@ -1045,8 +1133,9 @@
       const anchors=chooseAnchorPair(currentMeshData.positions);
       const uvV=buildUvMesh(r.uv,currentMeshData.faces,anchors);
       currentUvLines=uvV.lines;currentUvPins=uvV.pins;uvScene.add(currentUvLines);if(currentUvPins)uvScene.add(currentUvPins);
+      displaySeamUv();
       const fc=countFlippedFaces(r.uv,currentMeshData.faces);
-      showTiming(ms,(r.details?r.details+' / ':'')+label+' / '+MODEL_CATALOG[modelSel.value].label+' / '+currentMeshData.positions.length+' 顶点 / '+currentMeshData.faces.length+' 三角面',fc);
+      showTiming(ms,(r.details?r.details+' / ':'')+label+' / '+MODEL_CATALOG[modelSel.value].label+' / '+currentMeshData.positions.length+' 顶点 / '+currentMeshData.faces.length+' 三角面'+(seamEdges.size>0?' / seam='+seamEdges.size+' 条分割边':''),fc);
       setStatus(label+" 完成，翻转面 "+fc+" 个",fc===0?"#89f0b6":"#ffd38a");
     }catch(e){console.error(e);setStatus("失败: "+e.message,"#ff9d9d")}
     finally{setBusy(false)}
@@ -1076,6 +1165,7 @@
   document.getElementById('tree-btn-step3').addEventListener('click',step3HomologyBasis);
   document.getElementById('tree-btn-link').addEventListener('click',step4LinkLoop);
   document.getElementById('tree-btn-auto').addEventListener('click',autoRunAllTreeCotreeSteps);
+  document.getElementById('tree-btn-seam').addEventListener('click',buildSeamFromTreeCotree);
   tcSliceEl.addEventListener('input',onTcThicknessChange);
   document.querySelectorAll('input[name="method"]').forEach(function(r){
     r.addEventListener("change", function(){ updateButtonState(); });
