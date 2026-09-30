@@ -701,8 +701,8 @@
             <!-- BD-LSCM 共形失真上界 K = σ1/σ2 ≤ σ -->
             <span id="param-bd-bound" style="display:none;font-size:12px;color:#c6d1f4;">
               失真上界 σ:
-              <input type="range" id="bd-bound-slider" min="1" max="10" step="0.1" value="2" title="共形失真上界 K=σ₁/σ₂ ≤ σ，σ≥1。越小越接近共形，越大允许的形变越多。" style="width:90px;vertical-align:middle;margin:0 4px;">
-              <span id="bd-bound-val" style="min-width:32px;display:inline-block;">2.0</span>
+              <input type="range" id="bd-bound-slider" min="1" max="2" step="0.1" value="1.5" title="共形失真上界 K=σ₁/σ₂ ≤ σ，1≤σ≤2。越小越接近共形，越大允许的形变越多。" style="width:90px;vertical-align:middle;margin:0 4px;">
+              <span id="bd-bound-val" style="min-width:32px;display:inline-block;">1.5</span>
             </span>
             <!-- ABF 子类型选择 -->
             <span id="param-abf-type" style="display:none;font-size:12px;color:#c6d1f4;">
@@ -1888,7 +1888,7 @@
 
       function getBdDistortionBound() {
         const el = document.getElementById('bd-bound-slider');
-        let v = el ? parseFloat(el.value) : 2;
+        let v = el ? parseFloat(el.value) : 1;
         if (!isFinite(v) || v < 1) v = 1;
         return v;
       }
