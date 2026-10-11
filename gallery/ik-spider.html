@@ -80,8 +80,36 @@ const MODEL_URL = '/assets/gallery/Spider%20tank.glb';
 function gltfName(name) {
   return name.replace(/[\[\].:/]/g, '');
 }
-const FOOT_Y = 0.02;
-const MAX_ANG = [0.9, 1.15, 1.3];
+const FOOT_Y = 0.04;
+const _nml = new THREE.Vector3();
+
+function terrainHeight(x, z) {
+  const hill = 0.7 * Math.exp(-(x - 8) * (x - 8) / 48 - (z + 6) * (z + 6) / 48);
+  const bowl = -0.45 * Math.exp(-(x + 10) * (x + 10) / 36 - (z - 7) * (z - 7) / 36);
+  return (
+    1.05 * Math.sin(x * 0.2) +
+    0.55 * Math.cos(z * 0.16) +
+    0.4 * Math.sin(x * 0.29 + 1.7) * Math.sin(z * 0.24 + 0.4) +
+    0.2 * Math.sin((x + z) * 0.4 + 0.8) +
+    0.12 * Math.sin(x * 0.82 - z * 0.68) +
+    hill + bowl
+  );
+}
+
+function terrainNormal(x, z, out) {
+  const e = 0.28;
+  out.set(
+    terrainHeight(x - e, z) - terrainHeight(x + e, z),
+    2 * e,
+    terrainHeight(x, z - e) - terrainHeight(x, z + e)
+  );
+  return out.normalize();
+}
+
+function groundY(x, z) {
+  return terrainHeight(x, z) + FOOT_Y;
+}
+const MAX_ANG = [0.55, 0.7, 0.7];
 const LEG_SPECS = [
   { group: 0, chain: ['ValveBiped.L_leg_front', 'ValveBiped.L_leg_front1', 'ValveBiped.L_leg_front2'] },
   { group: 0, chain: ['ValveBiped.R_leg_middle', 'ValveBiped.R_leg_middle1', 'ValveBiped.R_leg_middle2'] },
@@ -159,54 +187,146 @@ function keepBend(joints, pole) {
   joints[1].copy(joints[0]).addScaledVector(_axis, kPar).sub(_perpK);
 }
 
-const _alignQ = new THREE.Quaternion();
 const _alignW = new THREE.Quaternion();
-const _alignP = new THREE.Quaternion();
 const _alignA = new THREE.Vector3();
 const _alignB = new THREE.Vector3();
-const _alignCur = new THREE.Vector3();
-const _alignDes = new THREE.Vector3();
+const _jQ = new THREE.Quaternion();
+const _jP = new THREE.Quaternion();
+const _jA = new THREE.Vector3();
+const _jB = new THREE.Vector3();
+const _jC = new THREE.Vector3();
+const _jD = new THREE.Vector3();
+const HIP_SWING = 1.05;
+const ANKLE_LIM = 0.55;
+const JUMP_LIM = 0.85;
 
-function rotateBone(bone, currentDir, desiredDir) {
-  if (currentDir.lengthSq() < 1e-10 || desiredDir.lengthSq() < 1e-10) return;
-  currentDir.normalize();
-  desiredDir.normalize();
-  if (currentDir.dot(desiredDir) > 0.999999) return;
-  _alignQ.setFromUnitVectors(currentDir, desiredDir);
-  bone.getWorldQuaternion(_alignW);
-  _alignW.premultiply(_alignQ);
-  bone.parent.getWorldQuaternion(_alignP);
-  bone.quaternion.copy(_alignP.invert()).multiply(_alignW);
+function projectOntoPlane(v, axis, out) {
+  out.copy(v).addScaledVector(axis, -v.dot(axis));
+  const len = out.length();
+  if (len < 1e-6) return false;
+  out.multiplyScalar(1 / len);
+  return true;
+}
+
+function signedAngleOnAxis(from, to, axis) {
+  _jD.crossVectors(from, to);
+  return Math.atan2(_jD.dot(axis), from.dot(to));
+}
+
+// θ = 0 是休息姿态。直腿在 toStraight 那一侧，留一点余量，避免反折。
+function hingeRange(bentDir, straightDir, axis, maxFlex) {
+  const margin = 0.22;
+  if (!projectOntoPlane(bentDir, axis, _jA) || !projectOntoPlane(straightDir, axis, _jB)) {
+    return [-maxFlex, maxFlex];
+  }
+  const toStraight = signedAngleOnAxis(_jA, _jB, axis);
+  if (toStraight >= 0) return [-maxFlex, Math.max(0.05, toStraight - margin)];
+  return [Math.min(-0.05, toStraight + margin), maxFlex];
+}
+
+function dirInParent(bone, worldPoint, out) {
+  bone.updateWorldMatrix(true, false);
+  bone.getWorldPosition(_jA);
+  _jB.subVectors(worldPoint, _jA);
+  bone.parent.getWorldQuaternion(_jP);
+  out.copy(_jB).applyQuaternion(_jP.invert());
+  return out;
+}
+
+// 髋：从休息姿态只做锥形摆动，不叠加绕股骨的扭转。
+function applyBall(bone, restQuat, localOffset, worldTarget, maxSwing) {
+  dirInParent(bone, worldTarget, _jC);
+  _jA.copy(localOffset).applyQuaternion(restQuat);
+  if (_jA.lengthSq() < 1e-8 || _jC.lengthSq() < 1e-8) {
+    bone.quaternion.copy(restQuat);
+  } else {
+    _jA.normalize();
+    _jC.normalize();
+    _jQ.setFromUnitVectors(_jA, _jC);
+    const ang = 2 * Math.acos(THREE.MathUtils.clamp(_jQ.w, -1, 1));
+    if (ang > maxSwing) _jQ.slerp(_ccdId, 1 - maxSwing / ang);
+    bone.quaternion.copy(_jQ.multiply(restQuat));
+  }
   bone.updateMatrixWorld(true);
 }
 
-function alignBoneToChild(bone, child, desiredWorld) {
-  bone.updateWorldMatrix(true, false);
-  bone.getWorldPosition(_alignA);
-  child.getWorldPosition(_alignB);
-  _alignCur.subVectors(_alignB, _alignA);
-  _alignDes.subVectors(desiredWorld, _alignA);
-  rotateBone(bone, _alignCur, _alignDes);
+// 膝、踝：父空间里的固定轴。角度相对休息姿态夹紧，不能转满一圈。
+function applyHinge(bone, restQuat, localOffset, worldTarget, axis, minA, maxA) {
+  dirInParent(bone, worldTarget, _jC);
+  _jB.copy(localOffset).applyQuaternion(restQuat);
+  if (!projectOntoPlane(_jB, axis, _jA) || !projectOntoPlane(_jC, axis, _jB)) {
+    bone.updateMatrixWorld(true);
+    return;
+  }
+  const ang = THREE.MathUtils.clamp(signedAngleOnAxis(_jA, _jB, axis), minA, maxA);
+  _jQ.setFromAxisAngle(axis, ang);
+  bone.quaternion.copy(_jQ.multiply(restQuat));
+  bone.updateMatrixWorld(true);
 }
 
-function alignBoneToOffset(bone, localOffset, desiredWorld) {
-  bone.updateWorldMatrix(true, false);
-  bone.getWorldPosition(_alignA);
-  bone.getWorldQuaternion(_alignW);
-  _alignB.copy(localOffset).applyQuaternion(_alignW).add(_alignA);
-  _alignCur.subVectors(_alignB, _alignA);
-  _alignDes.subVectors(desiredWorld, _alignA);
-  rotateBone(bone, _alignCur, _alignDes);
+function quatAngle(a, b) {
+  const d = Math.abs(a.dot(b));
+  return 2 * Math.acos(THREE.MathUtils.clamp(d, 0, 1));
+}
+
+function pickPadPoints(pts) {
+  if (!pts.length) return [new THREE.Vector3(0, 0.45, 0)];
+  const sole = pts.filter((p) => p.y > 0.38);
+  const src = sole.length ? sole : pts;
+  const c = new THREE.Vector3();
+  let lowest = src[0];
+  let minX = src[0];
+  let maxX = src[0];
+  let minZ = src[0];
+  let maxZ = src[0];
+  for (const p of src) {
+    c.add(p);
+    if (p.y > lowest.y) lowest = p;
+    if (p.x < minX.x) minX = p;
+    if (p.x > maxX.x) maxX = p;
+    if (p.z < minZ.z) minZ = p;
+    if (p.z > maxZ.z) maxZ = p;
+  }
+  c.multiplyScalar(1 / src.length);
+  return [c, lowest, minX, maxX, minZ, maxZ];
+}
+
+function collectPadLocals(root, ankle) {
+  const pts = [];
+  const v = new THREE.Vector3();
+  root.traverse((o) => {
+    if (!o.isSkinnedMesh) return;
+    const boneIndex = o.skeleton.bones.indexOf(ankle);
+    if (boneIndex < 0) return;
+    const pos = o.geometry.attributes.position;
+    const si = o.geometry.attributes.skinIndex;
+    const sw = o.geometry.attributes.skinWeight;
+    if (!pos || !si || !sw) return;
+    for (let i = 0; i < pos.count; i++) {
+      let w = 0;
+      if (si.getX(i) === boneIndex) w = Math.max(w, sw.getX(i));
+      if (si.getY(i) === boneIndex) w = Math.max(w, sw.getY(i));
+      if (si.getZ(i) === boneIndex) w = Math.max(w, sw.getZ(i));
+      if (si.getW(i) === boneIndex) w = Math.max(w, sw.getW(i));
+      if (w < 0.45) continue;
+      v.fromBufferAttribute(pos, i);
+      o.localToWorld(v);
+      if (v.y > 0.12) continue;
+      ankle.worldToLocal(v);
+      pts.push(v.clone());
+    }
+  });
+  return pickPadPoints(pts);
 }
 
 // ─── Scene ───────────────────────────────────────────────────
 const container = document.getElementById('sp-container');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87a8c4);
-scene.fog = new THREE.Fog(0x87a8c4, 28, 78);
+scene.fog = new THREE.Fog(0x87a8c4, 42, 95);
 
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
-camera.position.set(11, 7.2, 13);
+camera.position.set(11, terrainHeight(0, 0) + 7.2, 13);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -219,7 +339,7 @@ container.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.enablePan = false;
-controls.target.set(0, 1.8, 0);
+controls.target.set(0, terrainHeight(0, 0) + 1.8, 0);
 controls.maxPolarAngle = Math.PI * 0.49;
 controls.minDistance = 6;
 controls.maxDistance = 40;
@@ -244,24 +364,43 @@ const fill = new THREE.DirectionalLight(0xd0dcff, 0.7);
 fill.position.set(-10, 8, -8);
 scene.add(fill);
 
+const groundGeo = new THREE.PlaneGeometry(80, 80, 96, 96);
+groundGeo.rotateX(-Math.PI / 2);
+{
+  const pos = groundGeo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const h = terrainHeight(x, z);
+    pos.setY(i, h);
+    const t = THREE.MathUtils.clamp((h + 1.4) / 3.2, 0, 1);
+    colors[i * 3] = 0.22 + t * 0.16;
+    colors[i * 3 + 1] = 0.30 + t * 0.20;
+    colors[i * 3 + 2] = 0.16 + t * 0.08;
+  }
+  groundGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  groundGeo.computeVertexNormals();
+}
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(80, 80),
-  new THREE.MeshStandardMaterial({ color: 0x5a6b48, roughness: 0.92 })
+  groundGeo,
+  new THREE.MeshStandardMaterial({
+    color: 0x4a5a38,
+    vertexColors: true,
+    roughness: 0.94,
+    metalness: 0.02,
+    flatShading: true,
+  })
 );
-ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
-
-const grid = new THREE.GridHelper(80, 40, 0x4a5a3a, 0x3e4c36);
-grid.position.y = 0.01;
-scene.add(grid);
 
 function addRock(x, z, s) {
   const m = new THREE.Mesh(
     new THREE.DodecahedronGeometry(s, 0),
     new THREE.MeshStandardMaterial({ color: 0x6a6a72, roughness: 0.85, flatShading: true })
   );
-  m.position.set(x, s * 0.55, z);
+  m.position.set(x, terrainHeight(x, z) + s * 0.55, z);
   m.rotation.set(Math.random() * 0.4, Math.random() * 6, Math.random() * 0.4);
   m.castShadow = m.receiveShadow = true;
   scene.add(m);
@@ -272,11 +411,12 @@ const stump = new THREE.Mesh(
   new THREE.CylinderGeometry(0.7, 0.85, 0.55, 10),
   new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 })
 );
-stump.position.set(-8, 0.27, 5);
+stump.position.set(-8, terrainHeight(-8, 5) + 0.27, 5);
 stump.castShadow = stump.receiveShadow = true;
 scene.add(stump);
 
 const spider = new THREE.Group();
+spider.position.y = terrainHeight(0, 0);
 scene.add(spider);
 
 const ikLineMat = new THREE.LineBasicMaterial({
@@ -312,7 +452,7 @@ function fillHome(leg, out, leadTime) {
   out.copy(leg.restLocal);
   spider.localToWorld(out);
   if (leadTime) out.addScaledVector(worldVel, leadTime);
-  out.y = FOOT_Y;
+  out.y = groundY(out.x, out.z);
 }
 
 function clampReach(hip, target, minD, maxD, out) {
@@ -320,7 +460,7 @@ function clampReach(hip, target, minD, maxD, out) {
   const d = _move.length();
   if (d < 1e-6) {
     out.copy(hip);
-    out.y = FOOT_Y;
+    out.y = groundY(hip.x, hip.z);
     return;
   }
   const clamped = THREE.MathUtils.clamp(d, minD, maxD);
@@ -335,6 +475,56 @@ function soleWorld(leg, out) {
   _alignB.copy(leg.soleLocal).applyQuaternion(_alignW);
   out.add(_alignB);
 }
+
+function padClearance(leg) {
+  const foot = leg.bones[2];
+  foot.getWorldPosition(_alignA);
+  foot.getWorldQuaternion(_alignW);
+  let minC = Infinity;
+  for (const p of leg.padLocals) {
+    _alignB.copy(p).applyQuaternion(_alignW).add(_alignA);
+    const c = _alignB.y - terrainHeight(_alignB.x, _alignB.z);
+    if (c < minC) minC = c;
+  }
+  return minC;
+}
+
+function seedRestChain(leg) {
+  leg.bones[0].getWorldPosition(leg.joints[0]);
+  for (let i = 0; i < 3; i++) {
+    leg.joints[i + 1].copy(leg.restChain[i]);
+    spider.localToWorld(leg.joints[i + 1]);
+  }
+}
+
+function applyLegPose(leg) {
+  applyBall(leg.bones[0], leg.restQuat[0], leg.bones[1].position, leg.joints[1], HIP_SWING);
+  applyHinge(leg.bones[1], leg.restQuat[1], leg.bones[2].position, leg.joints[2], leg.kneeAxis, leg.kneeMin, leg.kneeMax);
+  leg.bones[2].getWorldPosition(_alignA);
+  terrainNormal(leg.target.x, leg.target.z, _nml);
+  _alignB.copy(_alignA).addScaledVector(_nml, -1);
+  applyHinge(leg.bones[2], leg.restQuat[2], leg.soleLocal, _alignB, leg.ankleAxis, -ANKLE_LIM, ANKLE_LIM);
+}
+
+function acceptLegPose(leg) {
+  const desired = [_jQ, _jP, _alignW];
+  for (let i = 0; i < 3; i++) desired[i].copy(leg.bones[i].quaternion);
+  for (let i = 0; i < 3; i++) {
+    const q = leg.bones[i].quaternion;
+    if (quatAngle(leg.prevQuat[i], desired[i]) > JUMP_LIM) {
+      q.slerpQuaternions(leg.prevQuat[i], desired[i], 0.35);
+    }
+    leg.bones[i].updateMatrixWorld(true);
+  }
+  if (padClearance(leg) < 0) {
+    for (let i = 0; i < 3; i++) {
+      leg.bones[i].quaternion.copy(desired[i]);
+      leg.bones[i].updateMatrixWorld(true);
+    }
+  }
+  for (let i = 0; i < 3; i++) leg.prevQuat[i].copy(leg.bones[i].quaternion);
+}
+
 
 function updateLegDebug(leg) {
   const pos = leg.linePos;
@@ -355,12 +545,12 @@ function updateLegDebug(leg) {
 }
 
 function resetSpider() {
-  spider.position.set(0, 0, 0);
+  spider.position.set(0, terrainHeight(0, 0), 0);
   yaw = 0;
   spider.rotation.y = 0;
   phase = 0;
   worldVel.set(0, 0, 0);
-  prevPos.set(0, 0, 0);
+  prevPos.copy(spider.position);
   for (const leg of legs) {
     leg.swinging = false;
     for (let i = 0; i < 3; i++) leg.bones[i].quaternion.copy(leg.restQuat[i]);
@@ -368,7 +558,7 @@ function resetSpider() {
   spider.updateMatrixWorld(true);
   for (const leg of legs) {
     soleWorld(leg, leg.planted);
-    leg.planted.y = FOOT_Y;
+    leg.planted.y = groundY(leg.planted.x, leg.planted.z);
     leg.swingFrom.copy(leg.planted);
     leg.target.copy(leg.planted);
   }
@@ -465,13 +655,31 @@ loader.load(MODEL_URL, (gltf) => {
     bones[2].getWorldPosition(_alignA);
     boneLengths[1] = _alignB.distanceTo(_alignA);
 
-    const restLocal = bones[2].getWorldPosition(new THREE.Vector3());
+    const padLocals = collectPadLocals(rig, bones[2]);
+    const soleLocal = padLocals[0].clone();
+    const restContact = bones[2].localToWorld(soleLocal.clone());
+    const restLocal = restContact.clone();
     restLocal.y = FOOT_Y;
-    const soleLocal = restLocal.clone();
-    bones[2].worldToLocal(soleLocal);
+    spider.worldToLocal(restLocal);
     boneLengths[2] = soleLocal.length();
+    const restChain = [
+      bones[1].getWorldPosition(new THREE.Vector3()),
+      bones[2].getWorldPosition(new THREE.Vector3()),
+      restContact.clone(),
+    ];
+    restChain.forEach((p) => spider.worldToLocal(p));
 
     const poleLocal = bones[1].getWorldPosition(new THREE.Vector3());
+    const shinInHip = bones[2].position.clone().applyQuaternion(restQuat[1]);
+    const kneeAxis = new THREE.Vector3().crossVectors(bones[1].position, shinInHip);
+    if (kneeAxis.lengthSq() < 1e-8) kneeAxis.set(1, 0, 0);
+    else kneeAxis.normalize();
+    const [kneeMin, kneeMax] = hingeRange(shinInHip, bones[1].position, kneeAxis, 1.05);
+    const soleInKnee = soleLocal.clone().applyQuaternion(restQuat[2]);
+    const ankleAxis = new THREE.Vector3().crossVectors(bones[2].position, soleInKnee);
+    if (ankleAxis.lengthSq() < 1e-8) ankleAxis.crossVectors(bones[2].position, new THREE.Vector3(0, 1, 0));
+    if (ankleAxis.lengthSq() < 1e-8) ankleAxis.set(1, 0, 0);
+    ankleAxis.normalize();
     const linePos = new Float32Array(12);
     const lineGeo = new THREE.BufferGeometry();
     lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
@@ -486,7 +694,8 @@ loader.load(MODEL_URL, (gltf) => {
     marker.visible = false;
     scene.add(marker);
 
-    const planted = restLocal.clone();
+    const planted = restContact.clone();
+    planted.y = groundY(planted.x, planted.z);
     legs.push({
       group: spec.group,
       bones,
@@ -494,7 +703,14 @@ loader.load(MODEL_URL, (gltf) => {
       boneLengths,
       restQuat,
       restLocal,
+      restChain,
       soleLocal,
+      padLocals,
+      prevQuat: restQuat.map((q) => q.clone()),
+      kneeAxis,
+      kneeMin,
+      kneeMax,
+      ankleAxis,
       poleLocal,
       pole: new THREE.Vector3(),
       planted,
@@ -507,6 +723,15 @@ loader.load(MODEL_URL, (gltf) => {
       marker,
     });
   }
+
+  spider.position.y = terrainHeight(spider.position.x, spider.position.z);
+  spider.updateMatrixWorld(true);
+  for (const leg of legs) {
+    fillHome(leg, leg.planted, 0);
+    leg.swingFrom.copy(leg.planted);
+    leg.target.copy(leg.planted);
+  }
+  prevPos.copy(spider.position);
 
   modelReady = true;
   loadingEl.classList.add('done');
@@ -552,9 +777,22 @@ function animate() {
     spider.position.z = THREE.MathUtils.clamp(spider.position.z, -26, 26);
     spider.rotation.y = yaw;
 
+    let bodyH = terrainHeight(spider.position.x, spider.position.z);
+    let bodyN = 1;
+    for (const leg of legs) {
+      bodyH += terrainHeight(leg.planted.x, leg.planted.z);
+      bodyN += 1;
+    }
+    spider.position.y = THREE.MathUtils.lerp(spider.position.y, bodyH / bodyN, 0.16);
+
     if (dt > 0) {
-      _frameVel.subVectors(spider.position, prevPos).multiplyScalar(1 / dt);
+      _frameVel.set(
+        (spider.position.x - prevPos.x) / dt,
+        0,
+        (spider.position.z - prevPos.z) / dt
+      );
       worldVel.lerp(_frameVel, 0.45);
+      worldVel.y = 0;
     }
     prevPos.copy(spider.position);
     spider.updateMatrixWorld(true);
@@ -571,6 +809,7 @@ function animate() {
 
     if (translating || needsStep || legs.some((l) => l.swinging)) {
       if (!legs.some((l) => l.swinging)) {
+        phase = Math.floor(phase);
         const g = ((Math.floor(phase) % 2) + 2) % 2;
         for (const leg of legs) {
           if (leg.group !== g) continue;
@@ -579,7 +818,7 @@ function animate() {
         }
       }
       const prev = Math.floor(phase);
-      phase += dt * rate;
+      phase += Math.min(dt * rate, 0.4);
       const cur = Math.floor(phase);
       if (cur !== prev) {
         const done = ((prev % 2) + 2) % 2;
@@ -606,30 +845,36 @@ function animate() {
         fillHome(leg, _home, leadTime);
         const t = smoothstep(swingT);
         leg.target.lerpVectors(leg.swingFrom, _home, t);
-        leg.target.y = FOOT_Y + Math.sin(Math.PI * t) * lift;
+        leg.target.y += Math.sin(Math.PI * t) * lift;
       } else {
         leg.target.copy(leg.planted);
-        leg.target.y = FOOT_Y;
       }
 
-      for (let i = 0; i < 3; i++) leg.bones[i].getWorldPosition(leg.joints[i]);
-      soleWorld(leg, leg.joints[3]);
-      const maxD = (leg.boneLengths[0] + leg.boneLengths[1] + leg.boneLengths[2]) * 0.985;
-      const minD = 0.2;
+      const maxD = (leg.boneLengths[0] + leg.boneLengths[1] + leg.boneLengths[2]) * 0.97;
+      const minD = Math.max(0.35, Math.abs(leg.boneLengths[0] - leg.boneLengths[1]) + 0.2);
+      leg.bones[0].getWorldPosition(leg.joints[0]);
       clampReach(leg.joints[0], leg.target, minD, maxD, leg.solveTarget);
-      solveCCD(leg.joints, leg.boneLengths, leg.solveTarget, ikIter, MAX_ANG);
-      leg.pole.copy(leg.poleLocal);
-      spider.localToWorld(leg.pole);
-      keepBend(leg.joints, leg.pole);
-      alignBoneToChild(leg.bones[0], leg.bones[1], leg.joints[1]);
-      alignBoneToChild(leg.bones[1], leg.bones[2], leg.joints[2]);
-      alignBoneToOffset(leg.bones[2], leg.soleLocal, leg.joints[3]);
+      const floorY = groundY(leg.solveTarget.x, leg.solveTarget.z);
+      if (leg.solveTarget.y < floorY) leg.solveTarget.y = floorY;
+
+      for (let pass = 0; pass < 4; pass++) {
+        seedRestChain(leg);
+        solveCCD(leg.joints, leg.boneLengths, leg.solveTarget, ikIter, MAX_ANG);
+        leg.pole.copy(leg.poleLocal);
+        spider.localToWorld(leg.pole);
+        keepBend(leg.joints, leg.pole);
+        applyLegPose(leg);
+        const low = padClearance(leg);
+        if (low >= 0.008) break;
+        leg.solveTarget.y += -low + 0.02;
+      }
+      acceptLegPose(leg);
       updateLegDebug(leg);
     }
 
-    sun.position.set(spider.position.x + 12, 18, spider.position.z + 8);
-    sunTarget.position.set(spider.position.x, 1.6, spider.position.z);
-    _look.set(spider.position.x, 1.7, spider.position.z);
+    sun.position.set(spider.position.x + 12, spider.position.y + 18, spider.position.z + 8);
+    sunTarget.position.set(spider.position.x, spider.position.y + 1.6, spider.position.z);
+    _look.set(spider.position.x, spider.position.y + 1.7, spider.position.z);
     controls.target.lerp(_look, 0.08);
   }
 
