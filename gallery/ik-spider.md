@@ -1,16 +1,16 @@
 ## IK 蜘蛛 — CCD 逆运动学驱动
 
-本 demo 用 **CCD（Cyclic Coordinate Descent，循环坐标下降）** 求解器驱动 8 条三骨节腿，足端目标由简单步态生成；身体用 WASD 在平地上移动。右侧可开关 **IK 链** 黄色折线，观察每帧迭代如何拉近足尖与目标点。
+本 demo 用 **CCD（Cyclic Coordinate Descent，循环坐标下降）** 驱动 Spider Tank 的 6 条腿。模型来自 `assets/gallery/Spider tank.glb`（取其中的 `6legv2_ARM` 骨骼）。足端目标由三足步态生成，身体用 WASD 在平地上移动。打开 **IK 链** 可看到黄色折线（髋 → 膝 → 踝 → 足底）和橙色目标点，迭代次数越低，足底离目标越远。
 
 ---
 
 ### 逆运动学（IK）问题
 
-已知开链骨骼：根关节 $\mathbf{p}_0$（固定在身体上）与 $n-1$ 段定长连杆 $| \mathbf{p}_{i+1}-\mathbf{p}_i | = L_i$，求关节角使末端 $\mathbf{p}_{n-1}$ 到达目标 $\mathbf{t}$。
+已知开链骨骼：根关节 $\mathbf{p}\_0$（固定在机体上）与 $n-1$ 段定长连杆 $| \mathbf{p}\_{i+1}-\mathbf{p}\_i | = L\_i$，求关节角使末端 $\mathbf{p}\_{n-1}$ 到达目标 $\mathbf{t}$。
 
-与正运动学（FK）$\mathbf{p}_i = f(\theta_1,\ldots,\theta_{n-1})$ 相反，IK 一般**无闭式解**（$n>2$ 时），需迭代数值法。
+与正运动学（FK）$\mathbf{p}\_i = f(\theta\_1,\ldots,\theta\_{n-1})$ 相反，IK 一般**无闭式解**（$n>2$ 时），需迭代数值法。
 
-本 demo 每条腿：$n=4$ 个关节（髋 → 膝 → 踝 → 趾尖），3 段骨长 $L_0,L_1,L_2$。
+本 demo 每条腿：$n=4$ 个关节（髋 → 膝 → 踝 → 足底），3 段骨长 $L\_0,L\_1,L\_2$。前两段是模型骨骼的实际长度；足底是踝骨局部空间里的固定点，大约在踝关节正下方贴地，这样第三条骨骼负责把足底踩到目标上。
 
 ---
 
@@ -20,11 +20,11 @@
 
 对关节 $i$（$i = n-2,\ldots,0$）：
 
-1. 记枢轴 $\mathbf{p}_i$，末端 $\mathbf{p}_{n-1}$，目标 $\mathbf{t}$。
-2. 单位向量 $\mathbf{u} = (\mathbf{p}_{n-1}-\mathbf{p}_i)/\|\cdot\|$，$\mathbf{v} = (\mathbf{t}-\mathbf{p}_i)/\|\cdot\|$。
+1. 记枢轴 $\mathbf{p}\_i$，末端 $\mathbf{p}\_{n-1}$，目标 $\mathbf{t}$。
+2. 单位向量 $\mathbf{u} = (\mathbf{p}\_{n-1}-\mathbf{p}\_i)/\|\cdot\|$，$\mathbf{v} = (\mathbf{t}-\mathbf{p}\_i)/\|\cdot\|$。
 3. 求最小旋转 $\mathbf{R}$ 使 $\mathbf{R}\mathbf{u}=\mathbf{v}$（轴角 / 四元数 `setFromUnitVectors`）。
-4. 对 $j=i+1,\ldots,n-1$：$\mathbf{p}_j \leftarrow \mathbf{p}_i + \mathbf{R}(\mathbf{p}_j-\mathbf{p}_i)$。
-5. **前向约束**：固定 $\mathbf{p}_0$，依次 $\mathbf{p}_{i+1} = \mathbf{p}_i + L_i \cdot \mathrm{normalize}(\mathbf{p}_{i+1}-\mathbf{p}_i)$。
+4. 对 $j=i+1,\ldots,n-1$：$\mathbf{p}\_j \leftarrow \mathbf{p}\_i + \mathbf{R}(\mathbf{p}\_j-\mathbf{p}\_i)$。
+5. **前向约束**：固定 $\mathbf{p}\_0$，依次 $\mathbf{p}\_{i+1} = \mathbf{p}\_i + L\_i \cdot \mathrm{normalize}(\mathbf{p}\_{i+1}-\mathbf{p}\_i)$。
 
 ```
 while 未收敛 and 迭代 < maxIter:
@@ -36,7 +36,7 @@ while 未收敛 and 迭代 < maxIter:
 
 **优点**：实现简单、每关节 $O(n)$、无需雅可比矩阵；适合实时角色/机械臂。
 
-**缺点**：可能陷入局部极小；长链或大角度弯曲时收敛慢。本 demo 对每关节加 **最大转角** `maxAngles[i]` 避免腿反折。
+**缺点**：可能陷入局部极小；长链或大角度弯曲时收敛慢。本 demo 对每关节加 **最大转角** `maxAngles[i]`，并在求解后把膝盖镜像到休息姿态的弯曲一侧，避免腿反折。镜像绕髋–踝轴进行，不改变骨长，也不挪动踝关节。
 
 ---
 
@@ -46,7 +46,7 @@ while 未收敛 and 迭代 < maxIter:
 |:---|:---|:---|
 | **CCD** | 逐关节旋转，再拉直骨长 | 实现极简，本 demo 采用 |
 | **FABRIK** | 先向目标“伸手”，再向根“拉回”保持骨长 | 大弯曲更稳，无三角函数 |
-| **雅可比转置 / IK** | $\Delta\theta = J^T (\mathbf{t}-\mathbf{p}_{end})$ | 通用，需求导与步长控制 |
+| **雅可比转置 / IK** | $\Delta\theta = J^T (\mathbf{t}-\mathbf{p}\_{end})$ | 通用，需求导与步长控制 |
 
 ---
 
@@ -55,18 +55,27 @@ while 未收敛 and 迭代 < maxIter:
 ```
 身体位姿 (位置 + yaw)
     ↓
-每条腿：髋附着点（体坐标 → 世界坐标）
+三足步态 → 足底目标 t（一组摆动、一组钉在地上）
     ↓
-步态相位 → 足端目标 t（摆动相抬脚 + 迈步偏移）
+读取当前骨骼世界坐标，CCD(关节, 骨长, t)
     ↓
-CCD(关节, 骨长, t) → 更新 4 个关节世界坐标
+把相邻关节的方向写回髋 / 膝 / 踝的局部旋转
     ↓
-圆柱段 + 关节球体对齐骨骼
+蒙皮网格跟随骨骼
 ```
 
-**步态**：8 条腿相位错开 $0.125$；`cycle < 0.45` 为摆动相（正弦抬脚），否则为支撑相；移动时沿身体前方加 `stride` 偏移，形成交替迈步。
+**骨骼**：每条腿三节，名称如 `ValveBiped.L_leg_front`、`…front1`、`…front2`（髋、膝、踝）。glTF 里同一套骨骼还有一份 `6legv3_ARM`，demo 只用 `6legv2_ARM`。
 
-**场景**：草地平面、网格、石块与树桩，阴影 + 雾效；相机 `OrbitControls` 可环绕，移动时目标点跟随蜘蛛。
+**步态**：6 条腿分成两组三足，
+
+- A：左前、右中、左后
+- B：右前、左中、右后
+
+移动或原地转向导致落足点偏离时，两组交替摆动。支撑相的足底保持世界坐标不动，由 IK 去够；摆动相沿平滑步从旧落点走到新落点，高度走一个正弦。站立且落足点已对齐时，不空踏。
+
+**写回骨骼**：CCD 得到的是世界坐标。髋、膝两节把子关节旋到目标位置；踝节把局部足底点旋到目标。蒙皮用的是骨骼局部旋转，所以要把世界旋转换成父节点下的局部四元数。
+
+**场景**：草地、网格、石块与树桩；相机环绕，移动时注视点跟着机体。
 
 ---
 
@@ -74,18 +83,18 @@ CCD(关节, 骨长, t) → 更新 4 个关节世界坐标
 
 | 按键 | 功能 |
 |:---|:---|
-| **W A S D** | 前后左右移动 |
-| **Q / E** | 身体原地转向 |
-| **速度** | 移动与步频 |
-| **IK 迭代** | CCD 每帧循环次数（越大越贴目标，略耗性能） |
-| **显示 IK 链** | 黄色折线：髋→趾尖 |
-| **重置位置** | 回到场景中心 |
+| **W A S D** | 沿机头方向前后左右移动 |
+| **Q / E** | 原地左转 / 右转 |
+| **速度** | 移动快慢（步频随之提高） |
+| **IK 迭代** | CCD 每帧循环次数（越大越贴目标） |
+| **显示 IK 链** | 黄线为骨骼，橙点为足底目标 |
+| **重置位置** | 回到场景中心，骨骼恢复休息姿态 |
 
 ---
 
 ### 代码入口
 
-求解器函数 `solveCCD(joints, boneLengths, target, iterations, maxAngles)` 在 `ik-spider.html` 脚本顶部，与上述伪代码一一对应，便于对照阅读。
+求解器 `solveCCD(joints, boneLengths, target, iterations, maxAngles)` 在 `ik-spider.html` 脚本顶部，与上面的伪代码对应。步态和写回骨骼在同一个脚本的动画循环里。
 
 ---
 

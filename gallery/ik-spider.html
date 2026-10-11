@@ -37,6 +37,19 @@ head_extra: |
     position:absolute; left:12px; bottom:12px; padding:8px 10px; border-radius:6px;
     background:rgba(0,0,0,0.45); font-size:11px; color:#a8b89a; line-height:1.5; pointer-events:none;
   }
+  .sp-loading {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:12px;
+    background:#1a1f16; z-index:2; transition:opacity 0.45s;
+  }
+  .sp-loading.done { opacity:0; pointer-events:none; }
+  .sp-spin {
+    width:32px; height:32px; border-radius:50%;
+    border:3px solid rgba(124,179,66,0.25); border-top-color:#7cb342;
+    animation:spSpin 0.8s linear infinite;
+  }
+  @keyframes spSpin { to { transform:rotate(360deg); } }
+  .sp-loading-text { color:#c5d4b4; font-size:13px; }
 </style>
 
 <div class="sp-wrap">
@@ -49,101 +62,197 @@ head_extra: |
   </div>
   <div class="sp-canvas">
     <div id="sp-container"></div>
-    <div class="sp-hud" id="sp-hud">CCD IK · 8 腿 × 3 骨节 · 足端目标由步态生成</div>
+    <div class="sp-hud" id="sp-hud">CCD IK · Spider Tank · 6 腿 × 3 骨节</div>
+    <div class="sp-loading" id="sp-loading">
+      <div class="sp-spin"></div>
+      <div class="sp-loading-text" id="sp-loading-text">加载 Spider Tank…</div>
+    </div>
   </div>
 </div>
 
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const MODEL_URL = '/assets/gallery/Spider%20tank.glb';
+// GLTFLoader 会去掉节点名里的 . : / 等字符，ValveBiped.L_leg_front → ValveBipedL_leg_front
+function gltfName(name) {
+  return name.replace(/[\[\].:/]/g, '');
+}
+const FOOT_Y = 0.02;
+const MAX_ANG = [0.9, 1.15, 1.3];
+const LEG_SPECS = [
+  { group: 0, chain: ['ValveBiped.L_leg_front', 'ValveBiped.L_leg_front1', 'ValveBiped.L_leg_front2'] },
+  { group: 0, chain: ['ValveBiped.R_leg_middle', 'ValveBiped.R_leg_middle1', 'ValveBiped.R_leg_middle2'] },
+  { group: 0, chain: ['ValveBiped.L_leg_back', 'ValveBiped.L_leg_back1', 'ValveBiped.L_leg_back2'] },
+  { group: 1, chain: ['ValveBiped.R_leg_front', 'ValveBiped.R_leg_front1', 'ValveBiped.R_leg_front2'] },
+  { group: 1, chain: ['ValveBiped.L_leg_middle', 'ValveBiped.L_leg_middle1', 'ValveBiped.L_leg_middle2'] },
+  { group: 1, chain: ['ValveBiped.R_leg_back', 'ValveBiped.R_leg_back1', 'ValveBiped.R_leg_back2'] },
+];
 
 // ─── CCD IK Solver（与右侧文档公式对应）────────────────────
+const _ccdTmp = new THREE.Vector3();
+const _ccdEnd = new THREE.Vector3();
+const _ccdTgt = new THREE.Vector3();
+const _ccdQ = new THREE.Quaternion();
+const _ccdId = new THREE.Quaternion();
+
 function solveCCD(joints, boneLengths, target, iterations, maxAngles) {
   const n = joints.length;
   if (n < 2) return;
-
   const end = joints[n - 1];
-  const tmp = new THREE.Vector3();
-  const dirEnd = new THREE.Vector3();
-  const dirTgt = new THREE.Vector3();
-  const q = new THREE.Quaternion();
-  const id = new THREE.Quaternion();
 
   for (let iter = 0; iter < iterations; iter++) {
     if (end.distanceToSquared(target) < 1e-5) break;
 
     for (let i = n - 2; i >= 0; i--) {
       const pivot = joints[i];
-      dirEnd.subVectors(end, pivot);
-      dirTgt.subVectors(target, pivot);
-      const lenE = dirEnd.length();
-      const lenT = dirTgt.length();
+      _ccdEnd.subVectors(end, pivot);
+      _ccdTgt.subVectors(target, pivot);
+      const lenE = _ccdEnd.length();
+      const lenT = _ccdTgt.length();
       if (lenE < 1e-6 || lenT < 1e-6) continue;
-      dirEnd.multiplyScalar(1 / lenE);
-      dirTgt.multiplyScalar(1 / lenT);
+      _ccdEnd.multiplyScalar(1 / lenE);
+      _ccdTgt.multiplyScalar(1 / lenT);
 
-      q.setFromUnitVectors(dirEnd, dirTgt);
+      _ccdQ.setFromUnitVectors(_ccdEnd, _ccdTgt);
       if (maxAngles && maxAngles[i] !== undefined) {
-        const ang = 2 * Math.acos(THREE.MathUtils.clamp(q.w, -1, 1));
-        if (ang > maxAngles[i]) q.slerp(id, 1 - maxAngles[i] / ang);
+        const ang = 2 * Math.acos(THREE.MathUtils.clamp(_ccdQ.w, -1, 1));
+        if (ang > maxAngles[i]) _ccdQ.slerp(_ccdId, 1 - maxAngles[i] / ang);
       }
 
       for (let j = i + 1; j < n; j++) {
-        tmp.subVectors(joints[j], pivot).applyQuaternion(q).add(pivot);
-        joints[j].copy(tmp);
+        _ccdTmp.subVectors(joints[j], pivot).applyQuaternion(_ccdQ).add(pivot);
+        joints[j].copy(_ccdTmp);
       }
     }
 
     for (let i = 0; i < n - 1; i++) {
-      tmp.subVectors(joints[i + 1], joints[i]);
-      const len = tmp.length() || 1;
-      tmp.multiplyScalar(boneLengths[i] / len);
-      joints[i + 1].copy(joints[i]).add(tmp);
+      _ccdTmp.subVectors(joints[i + 1], joints[i]);
+      const len = _ccdTmp.length() || 1;
+      _ccdTmp.multiplyScalar(boneLengths[i] / len);
+      joints[i + 1].copy(joints[i]).add(_ccdTmp);
     }
   }
+}
+
+// 膝必须朝休息姿态那一侧弯，避免 CCD 把腿翻到反面。绕髋–踝轴镜像，骨长和足端都不变。
+const _axis = new THREE.Vector3();
+const _kneeV = new THREE.Vector3();
+const _poleV = new THREE.Vector3();
+const _perpK = new THREE.Vector3();
+const _perpP = new THREE.Vector3();
+
+function keepBend(joints, pole) {
+  _axis.subVectors(joints[2], joints[0]);
+  const axisLen = _axis.length();
+  if (axisLen < 1e-4) return;
+  _axis.multiplyScalar(1 / axisLen);
+  _kneeV.subVectors(joints[1], joints[0]);
+  _poleV.subVectors(pole, joints[0]);
+  const kPar = _kneeV.dot(_axis);
+  _perpK.copy(_kneeV).addScaledVector(_axis, -kPar);
+  _perpP.copy(_poleV).addScaledVector(_axis, -_poleV.dot(_axis));
+  if (_perpK.lengthSq() < 1e-8 || _perpP.lengthSq() < 1e-8) return;
+  if (_perpK.dot(_perpP) >= 0) return;
+  joints[1].copy(joints[0]).addScaledVector(_axis, kPar).sub(_perpK);
+}
+
+const _alignQ = new THREE.Quaternion();
+const _alignW = new THREE.Quaternion();
+const _alignP = new THREE.Quaternion();
+const _alignA = new THREE.Vector3();
+const _alignB = new THREE.Vector3();
+const _alignCur = new THREE.Vector3();
+const _alignDes = new THREE.Vector3();
+
+function rotateBone(bone, currentDir, desiredDir) {
+  if (currentDir.lengthSq() < 1e-10 || desiredDir.lengthSq() < 1e-10) return;
+  currentDir.normalize();
+  desiredDir.normalize();
+  if (currentDir.dot(desiredDir) > 0.999999) return;
+  _alignQ.setFromUnitVectors(currentDir, desiredDir);
+  bone.getWorldQuaternion(_alignW);
+  _alignW.premultiply(_alignQ);
+  bone.parent.getWorldQuaternion(_alignP);
+  bone.quaternion.copy(_alignP.invert()).multiply(_alignW);
+  bone.updateMatrixWorld(true);
+}
+
+function alignBoneToChild(bone, child, desiredWorld) {
+  bone.updateWorldMatrix(true, false);
+  bone.getWorldPosition(_alignA);
+  child.getWorldPosition(_alignB);
+  _alignCur.subVectors(_alignB, _alignA);
+  _alignDes.subVectors(desiredWorld, _alignA);
+  rotateBone(bone, _alignCur, _alignDes);
+}
+
+function alignBoneToOffset(bone, localOffset, desiredWorld) {
+  bone.updateWorldMatrix(true, false);
+  bone.getWorldPosition(_alignA);
+  bone.getWorldQuaternion(_alignW);
+  _alignB.copy(localOffset).applyQuaternion(_alignW).add(_alignA);
+  _alignCur.subVectors(_alignB, _alignA);
+  _alignDes.subVectors(desiredWorld, _alignA);
+  rotateBone(bone, _alignCur, _alignDes);
 }
 
 // ─── Scene ───────────────────────────────────────────────────
 const container = document.getElementById('sp-container');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87a8c4);
-scene.fog = new THREE.Fog(0x87a8c4, 12, 42);
+scene.fog = new THREE.Fog(0x87a8c4, 28, 78);
 
-const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 80);
-camera.position.set(4, 3.2, 5.5);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+camera.position.set(11, 7.2, 13);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
 container.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.target.set(0, 0.4, 0);
-controls.maxPolarAngle = Math.PI * 0.48;
-controls.minDistance = 2;
-controls.maxDistance = 18;
+controls.enablePan = false;
+controls.target.set(0, 1.8, 0);
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minDistance = 6;
+controls.maxDistance = 40;
 
-scene.add(new THREE.HemisphereLight(0xc8e6ff, 0x3d4a2e, 0.55));
-const sun = new THREE.DirectionalLight(0xfff4d6, 1.1);
-sun.position.set(6, 12, 4);
+scene.add(new THREE.HemisphereLight(0xd7ecff, 0x6d7a52, 0.85));
+scene.add(new THREE.AmbientLight(0xffffff, 0.28));
+const sun = new THREE.DirectionalLight(0xfff3d8, 2.8);
+sun.position.set(12, 18, 8);
 sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.near = 1;
-sun.shadow.camera.far = 30;
-sun.shadow.camera.left = sun.shadow.camera.bottom = -10;
-sun.shadow.camera.right = sun.shadow.camera.top = 10;
+sun.shadow.camera.far = 48;
+sun.shadow.camera.left = sun.shadow.camera.bottom = -14;
+sun.shadow.camera.right = sun.shadow.camera.top = 14;
+sun.shadow.bias = -0.00015;
+sun.shadow.normalBias = 0.04;
 scene.add(sun);
+const sunTarget = new THREE.Object3D();
+scene.add(sunTarget);
+sun.target = sunTarget;
+const fill = new THREE.DirectionalLight(0xd0dcff, 0.7);
+fill.position.set(-10, 8, -8);
+scene.add(fill);
 
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(28, 28),
+  new THREE.PlaneGeometry(80, 80),
   new THREE.MeshStandardMaterial({ color: 0x5a6b48, roughness: 0.92 })
 );
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-const grid = new THREE.GridHelper(28, 28, 0x4a5a3a, 0x3a4a32);
+const grid = new THREE.GridHelper(80, 40, 0x4a5a3a, 0x3e4c36);
 grid.position.y = 0.01;
 scene.add(grid);
 
@@ -153,160 +262,131 @@ function addRock(x, z, s) {
     new THREE.MeshStandardMaterial({ color: 0x6a6a72, roughness: 0.85, flatShading: true })
   );
   m.position.set(x, s * 0.55, z);
-  m.rotation.set(Math.random() * 0.5, Math.random() * 6, Math.random() * 0.5);
+  m.rotation.set(Math.random() * 0.4, Math.random() * 6, Math.random() * 0.4);
   m.castShadow = m.receiveShadow = true;
   scene.add(m);
 }
-[[-3, -2, 0.35], [2.5, 1.8, 0.5], [-1.5, 3, 0.28], [4, -3, 0.4]].forEach(([x, z, s]) => addRock(x, z, s));
+[[-9, -7, 0.9], [10, 6, 1.15], [-7, 9, 0.7], [11, -9, 1.0], [6, -12, 0.65]].forEach(([x, z, s]) => addRock(x, z, s));
 
 const stump = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.45, 0.55, 0.35, 10),
+  new THREE.CylinderGeometry(0.7, 0.85, 0.55, 10),
   new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 })
 );
-stump.position.set(-2.2, 0.175, 1.2);
+stump.position.set(-8, 0.27, 5);
 stump.castShadow = stump.receiveShadow = true;
 scene.add(stump);
 
-// ─── Spider ──────────────────────────────────────────────────
 const spider = new THREE.Group();
 scene.add(spider);
 
-const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.55, metalness: 0.15 });
-const jointMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.7 });
-const legMat = new THREE.MeshStandardMaterial({ color: 0x1a1a22, roughness: 0.5, metalness: 0.2 });
-
-const cephalothorax = new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 16), bodyMat);
-cephalothorax.scale.set(1.15, 0.65, 1.05);
-cephalothorax.castShadow = true;
-spider.add(cephalothorax);
-
-const abdomen = new THREE.Mesh(new THREE.SphereGeometry(0.38, 18, 14), bodyMat);
-abdomen.position.set(0, 0.05, -0.48);
-abdomen.scale.set(0.95, 0.7, 1.15);
-abdomen.castShadow = true;
-spider.add(abdomen);
-
-const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), bodyMat);
-head.position.set(0, 0.02, 0.42);
-head.castShadow = true;
-spider.add(head);
-
-const segGeo = new THREE.CylinderGeometry(0.035, 0.028, 1, 6);
-segGeo.translate(0, 0.5, 0);
-
-const BONE_LEN = [0.32, 0.48, 0.42];
-const MAX_ANG = [0.85, 1.1, 1.35];
-const LEG_ANGLES = [0.35, 0.85, 1.45, 2.05, 2.55, 3.15, 3.75, 4.35];
-const LEG_SIDE = [1, 1, 1, 1, -1, -1, -1, -1];
+const ikLineMat = new THREE.LineBasicMaterial({
+  color: 0xffeb3b, transparent: true, opacity: 0.95, depthTest: false,
+});
+const targetGeo = new THREE.SphereGeometry(0.12, 10, 8);
+const targetMat = new THREE.MeshBasicMaterial({
+  color: 0xff7043, transparent: true, opacity: 0.95, depthTest: false,
+});
 
 let showIK = false;
-const ikLineMat = new THREE.LineBasicMaterial({ color: 0xffeb3b, transparent: true, opacity: 0.9 });
-
-function makeLeg() {
-  const segs = [];
-  for (let i = 0; i < 3; i++) {
-    const mesh = new THREE.Mesh(segGeo, legMat);
-    mesh.castShadow = true;
-    spider.add(mesh);
-    segs.push(mesh);
-  }
-  const jointMeshes = [];
-  for (let i = 0; i < 4; i++) {
-    const jm = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), jointMat);
-    jm.castShadow = true;
-    spider.add(jm);
-    jointMeshes.push(jm);
-  }
-  const lineGeo = new THREE.BufferGeometry();
-  const line = new THREE.Line(lineGeo, ikLineMat);
-  line.visible = false;
-  spider.add(line);
-  return { segs, jointMeshes, line };
-}
-
-const legs = [];
-for (let i = 0; i < 8; i++) {
-  legs.push({
-    angle: LEG_ANGLES[i],
-    side: LEG_SIDE[i],
-    phase: i * 0.125,
-    boneLengths: [...BONE_LEN],
-    joints: [
-      new THREE.Vector3(), new THREE.Vector3(),
-      new THREE.Vector3(), new THREE.Vector3(),
-    ],
-    target: new THREE.Vector3(),
-    ...makeLeg(),
-  });
-}
-
-const _yAxis = new THREE.Vector3(0, 1, 0);
-const _dir = new THREE.Vector3();
-
-function orientSegment(mesh, a, b) {
-  const len = a.distanceTo(b);
-  if (len < 1e-5) return;
-  mesh.position.copy(a).lerp(b, 0.5);
-  mesh.scale.set(1, len, 1);
-  _dir.subVectors(b, a).normalize();
-  mesh.quaternion.setFromUnitVectors(_yAxis, _dir);
-}
-
-function updateLegVisual(leg) {
-  const j = leg.joints;
-  for (let i = 0; i < 3; i++) orientSegment(leg.segs[i], j[i], j[i + 1]);
-  for (let i = 0; i < 4; i++) leg.jointMeshes[i].position.copy(j[i]);
-  const pos = new Float32Array(12);
-  for (let i = 0; i < 4; i++) {
-    pos[i * 3] = j[i].x;
-    pos[i * 3 + 1] = j[i].y;
-    pos[i * 3 + 2] = j[i].z;
-  }
-  leg.line.geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  leg.line.geometry.attributes.position.needsUpdate = true;
-  leg.line.visible = showIK;
-}
-
-function getAttachLocal(angle, side) {
-  const lateral = 0.38 * side;
-  const forward = 0.55 * Math.cos(angle);
-  const sideW = 0.55 * Math.sin(angle);
-  return new THREE.Vector3(sideW, -0.08, forward + lateral * 0.15);
-}
-
-function getFootTarget(leg, yaw, speed, time) {
-  const cycle = (time * 0.0035 * (0.4 + speed) + leg.phase) % 1;
-  const swing = cycle < 0.45;
-  const lift = swing ? Math.sin((cycle / 0.45) * Math.PI) * 0.22 : 0;
-  const stride = speed > 0.05 ? 0.38 : 0;
-  const strideOff = swing ? stride * (1 - cycle / 0.45) : -stride * 0.35;
-
-  const reach = 0.95;
-  const lx = Math.cos(leg.angle) * reach + strideOff;
-  const lz = Math.sin(leg.angle) * reach;
-  const ly = 0.02 + lift;
-
-  const local = new THREE.Vector3(leg.side * 0.52 + lx * 0.15, ly, lz);
-  const c = Math.cos(yaw);
-  const s = Math.sin(yaw);
-  return new THREE.Vector3(
-    spider.position.x + local.x * c - local.z * s,
-    local.y,
-    spider.position.z + local.x * s + local.z * c
-  );
-}
-
-// ─── Movement ────────────────────────────────────────────────
-const keys = {};
-let moveSpeed = 0.55;
+let modelReady = false;
+let speed01 = 0.55;
 let ikIter = 12;
 let yaw = 0;
+let phase = 0;
+const keys = {};
+const legs = [];
+const worldVel = new THREE.Vector3();
+const prevPos = new THREE.Vector3();
+const _frameVel = new THREE.Vector3();
+const _home = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _move = new THREE.Vector3();
+const _look = new THREE.Vector3();
 
-document.addEventListener('keydown', (e) => { keys[e.code] = true; });
+function smoothstep(t) {
+  const x = THREE.MathUtils.clamp(t, 0, 1);
+  return x * x * (3 - 2 * x);
+}
+
+function fillHome(leg, out, leadTime) {
+  out.copy(leg.restLocal);
+  spider.localToWorld(out);
+  if (leadTime) out.addScaledVector(worldVel, leadTime);
+  out.y = FOOT_Y;
+}
+
+function clampReach(hip, target, minD, maxD, out) {
+  _move.subVectors(target, hip);
+  const d = _move.length();
+  if (d < 1e-6) {
+    out.copy(hip);
+    out.y = FOOT_Y;
+    return;
+  }
+  const clamped = THREE.MathUtils.clamp(d, minD, maxD);
+  _move.multiplyScalar(clamped / d);
+  out.copy(hip).add(_move);
+}
+
+function soleWorld(leg, out) {
+  const foot = leg.bones[2];
+  foot.getWorldPosition(out);
+  foot.getWorldQuaternion(_alignW);
+  _alignB.copy(leg.soleLocal).applyQuaternion(_alignW);
+  out.add(_alignB);
+}
+
+function updateLegDebug(leg) {
+  const pos = leg.linePos;
+  for (let i = 0; i < 3; i++) {
+    leg.bones[i].getWorldPosition(_alignA);
+    pos[i * 3] = _alignA.x;
+    pos[i * 3 + 1] = _alignA.y;
+    pos[i * 3 + 2] = _alignA.z;
+  }
+  soleWorld(leg, _alignA);
+  pos[9] = _alignA.x;
+  pos[10] = _alignA.y;
+  pos[11] = _alignA.z;
+  leg.line.geometry.attributes.position.needsUpdate = true;
+  leg.line.visible = showIK;
+  leg.marker.position.copy(leg.target);
+  leg.marker.visible = showIK;
+}
+
+function resetSpider() {
+  spider.position.set(0, 0, 0);
+  yaw = 0;
+  spider.rotation.y = 0;
+  phase = 0;
+  worldVel.set(0, 0, 0);
+  prevPos.set(0, 0, 0);
+  for (const leg of legs) {
+    leg.swinging = false;
+    for (let i = 0; i < 3; i++) leg.bones[i].quaternion.copy(leg.restQuat[i]);
+  }
+  spider.updateMatrixWorld(true);
+  for (const leg of legs) {
+    soleWorld(leg, leg.planted);
+    leg.planted.y = FOOT_Y;
+    leg.swingFrom.copy(leg.planted);
+    leg.target.copy(leg.planted);
+  }
+}
+
+const CONTROL_KEYS = new Set([
+  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+]);
+document.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (CONTROL_KEYS.has(e.code)) e.preventDefault();
+});
 document.addEventListener('keyup', (e) => { keys[e.code] = false; });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
 document.getElementById('sp-speed').addEventListener('input', (e) => {
-  moveSpeed = parseInt(e.target.value, 10) / 100;
+  speed01 = parseInt(e.target.value, 10) / 100;
 });
 document.getElementById('sp-iter').addEventListener('input', (e) => {
   ikIter = parseInt(e.target.value, 10);
@@ -315,15 +395,12 @@ document.getElementById('sp-show-ik').addEventListener('click', function () {
   showIK = !showIK;
   this.classList.toggle('active', showIK);
 });
-document.getElementById('sp-reset').addEventListener('click', () => {
-  spider.position.set(0, 0, 0);
-  yaw = 0;
-  spider.rotation.y = 0;
-});
+document.getElementById('sp-reset').addEventListener('click', resetSpider);
 
 function resize() {
   const w = container.clientWidth;
   const h = container.clientHeight;
+  if (w < 1 || h < 1) return;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
@@ -331,58 +408,231 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
+const loadingEl = document.getElementById('sp-loading');
+const loadingText = document.getElementById('sp-loading-text');
+
+const loader = new GLTFLoader();
+loader.load(MODEL_URL, (gltf) => {
+  const rig = gltf.scene.getObjectByName(gltfName('6legv2_ARM'));
+  const extra = gltf.scene.getObjectByName(gltfName('6legv3_ARM'));
+  if (extra) {
+    extra.removeFromParent();
+    extra.traverse((o) => {
+      if (!o.isMesh) return;
+      o.geometry.dispose();
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      mats.forEach((m) => m.dispose());
+    });
+  }
+  if (!rig) {
+    loadingText.textContent = '模型里没有 6legv2 骨骼';
+    return;
+  }
+
+  rig.traverse((o) => {
+    if (o.name && o.name.startsWith(gltfName('open.smd'))) o.visible = false;
+    if (!o.isMesh) return;
+    o.castShadow = true;
+    o.receiveShadow = true;
+    o.frustumCulled = false;
+  });
+
+  const maxAniso = renderer.capabilities.getMaxAnisotropy();
+  rig.traverse((o) => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    mats.forEach((m) => {
+      if (m.map) m.map.anisotropy = maxAniso;
+      if (m.normalMap) m.normalMap.anisotropy = maxAniso;
+    });
+  });
+
+  spider.add(gltf.scene);
+  spider.updateMatrixWorld(true);
+
+  for (const spec of LEG_SPECS) {
+    const bones = spec.chain.map((name) => rig.getObjectByName(gltfName(name)));
+    if (bones.some((b) => !b)) {
+      loadingText.textContent = '腿骨骼缺失';
+      return;
+    }
+    const joints = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    const restQuat = bones.map((b) => b.quaternion.clone());
+    const boneLengths = [0, 0, 0];
+    bones[0].getWorldPosition(_alignA);
+    bones[1].getWorldPosition(_alignB);
+    boneLengths[0] = _alignA.distanceTo(_alignB);
+    bones[2].getWorldPosition(_alignA);
+    boneLengths[1] = _alignB.distanceTo(_alignA);
+
+    const restLocal = bones[2].getWorldPosition(new THREE.Vector3());
+    restLocal.y = FOOT_Y;
+    const soleLocal = restLocal.clone();
+    bones[2].worldToLocal(soleLocal);
+    boneLengths[2] = soleLocal.length();
+
+    const poleLocal = bones[1].getWorldPosition(new THREE.Vector3());
+    const linePos = new Float32Array(12);
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+    const line = new THREE.Line(lineGeo, ikLineMat);
+    line.frustumCulled = false;
+    line.renderOrder = 2;
+    line.visible = false;
+    scene.add(line);
+    const marker = new THREE.Mesh(targetGeo, targetMat);
+    marker.frustumCulled = false;
+    marker.renderOrder = 2;
+    marker.visible = false;
+    scene.add(marker);
+
+    const planted = restLocal.clone();
+    legs.push({
+      group: spec.group,
+      bones,
+      joints,
+      boneLengths,
+      restQuat,
+      restLocal,
+      soleLocal,
+      poleLocal,
+      pole: new THREE.Vector3(),
+      planted,
+      swingFrom: planted.clone(),
+      target: planted.clone(),
+      solveTarget: new THREE.Vector3(),
+      swinging: false,
+      line,
+      linePos,
+      marker,
+    });
+  }
+
+  modelReady = true;
+  loadingEl.classList.add('done');
+}, (e) => {
+  if (!e.total) return;
+  const p = Math.min(100, Math.round(100 * e.loaded / e.total));
+  loadingText.textContent = `加载 Spider Tank… ${p}%`;
+}, () => {
+  loadingText.textContent = '模型加载失败';
+});
+
 const clock = new THREE.Clock();
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
-  const t = performance.now();
+  const viewW = container.clientWidth;
+  const viewH = container.clientHeight;
+  const pr = renderer.getPixelRatio();
+  if (viewW > 0 && viewH > 0 && (
+    renderer.domElement.width !== Math.floor(viewW * pr) ||
+    renderer.domElement.height !== Math.floor(viewH * pr)
+  )) resize();
 
-  let vx = 0;
-  let vz = 0;
-  if (keys.KeyW || keys.ArrowUp) vz -= 1;
-  if (keys.KeyS || keys.ArrowDown) vz += 1;
-  if (keys.KeyA || keys.ArrowLeft) vx -= 1;
-  if (keys.KeyD || keys.ArrowRight) vx += 1;
-  if (keys.KeyQ) yaw += dt * 1.8;
-  if (keys.KeyE) yaw -= dt * 1.8;
+  if (modelReady) {
+    let ix = 0;
+    let iz = 0;
+    if (keys.KeyW || keys.ArrowUp) iz -= 1;
+    if (keys.KeyS || keys.ArrowDown) iz += 1;
+    if (keys.KeyA || keys.ArrowLeft) ix -= 1;
+    if (keys.KeyD || keys.ArrowRight) ix += 1;
+    if (keys.KeyQ) yaw += dt * 1.6;
+    if (keys.KeyE) yaw -= dt * 1.6;
 
-  const len = Math.hypot(vx, vz);
-  if (len > 0) {
-    vx /= len;
-    vz /= len;
-    const speed = moveSpeed * 2.2;
-    spider.position.x += (vx * Math.cos(yaw) - vz * Math.sin(yaw)) * speed * dt;
-    spider.position.z += (vx * Math.sin(yaw) + vz * Math.cos(yaw)) * speed * dt;
-    spider.rotation.y = yaw + Math.atan2(vx, -vz);
-  } else {
-    spider.rotation.y = THREE.MathUtils.lerp(spider.rotation.y, yaw, 0.08);
+    const inputLen = Math.hypot(ix, iz);
+    if (inputLen > 0) {
+      _move.set(ix / inputLen, 0, iz / inputLen);
+      _move.applyAxisAngle(_up, yaw);
+      const speed = 0.6 + speed01 * 2.2;
+      spider.position.addScaledVector(_move, speed * dt);
+    }
+    spider.position.x = THREE.MathUtils.clamp(spider.position.x, -26, 26);
+    spider.position.z = THREE.MathUtils.clamp(spider.position.z, -26, 26);
+    spider.rotation.y = yaw;
+
+    if (dt > 0) {
+      _frameVel.subVectors(spider.position, prevPos).multiplyScalar(1 / dt);
+      worldVel.lerp(_frameVel, 0.45);
+    }
+    prevPos.copy(spider.position);
+    spider.updateMatrixWorld(true);
+
+    const speedNow = worldVel.length();
+    const translating = inputLen > 0;
+    let needsStep = false;
+    for (const leg of legs) {
+      fillHome(leg, _home, 0);
+      if (leg.planted.distanceToSquared(_home) > 0.55 * 0.55) needsStep = true;
+    }
+    const rate = translating ? THREE.MathUtils.lerp(1.35, 2.4, speed01) : 1.6;
+    const leadTime = translating ? 0.55 / rate : 0;
+
+    if (translating || needsStep || legs.some((l) => l.swinging)) {
+      if (!legs.some((l) => l.swinging)) {
+        const g = ((Math.floor(phase) % 2) + 2) % 2;
+        for (const leg of legs) {
+          if (leg.group !== g) continue;
+          leg.swingFrom.copy(leg.planted);
+          leg.swinging = true;
+        }
+      }
+      const prev = Math.floor(phase);
+      phase += dt * rate;
+      const cur = Math.floor(phase);
+      if (cur !== prev) {
+        const done = ((prev % 2) + 2) % 2;
+        for (const leg of legs) {
+          if (leg.group !== done) continue;
+          fillHome(leg, leg.planted, leadTime);
+          leg.swinging = false;
+        }
+        if (translating || needsStep) {
+          const g = ((cur % 2) + 2) % 2;
+          for (const leg of legs) {
+            if (leg.group !== g) continue;
+            leg.swingFrom.copy(leg.planted);
+            leg.swinging = true;
+          }
+        }
+      }
+    }
+
+    const swingT = phase - Math.floor(phase);
+    const lift = 0.7 + speed01 * 0.45;
+    for (const leg of legs) {
+      if (leg.swinging) {
+        fillHome(leg, _home, leadTime);
+        const t = smoothstep(swingT);
+        leg.target.lerpVectors(leg.swingFrom, _home, t);
+        leg.target.y = FOOT_Y + Math.sin(Math.PI * t) * lift;
+      } else {
+        leg.target.copy(leg.planted);
+        leg.target.y = FOOT_Y;
+      }
+
+      for (let i = 0; i < 3; i++) leg.bones[i].getWorldPosition(leg.joints[i]);
+      soleWorld(leg, leg.joints[3]);
+      const maxD = (leg.boneLengths[0] + leg.boneLengths[1] + leg.boneLengths[2]) * 0.985;
+      const minD = 0.2;
+      clampReach(leg.joints[0], leg.target, minD, maxD, leg.solveTarget);
+      solveCCD(leg.joints, leg.boneLengths, leg.solveTarget, ikIter, MAX_ANG);
+      leg.pole.copy(leg.poleLocal);
+      spider.localToWorld(leg.pole);
+      keepBend(leg.joints, leg.pole);
+      alignBoneToChild(leg.bones[0], leg.bones[1], leg.joints[1]);
+      alignBoneToChild(leg.bones[1], leg.bones[2], leg.joints[2]);
+      alignBoneToOffset(leg.bones[2], leg.soleLocal, leg.joints[3]);
+      updateLegDebug(leg);
+    }
+
+    sun.position.set(spider.position.x + 12, 18, spider.position.z + 8);
+    sunTarget.position.set(spider.position.x, 1.6, spider.position.z);
+    _look.set(spider.position.x, 1.7, spider.position.z);
+    controls.target.lerp(_look, 0.08);
   }
 
-  spider.position.x = THREE.MathUtils.clamp(spider.position.x, -12, 12);
-  spider.position.z = THREE.MathUtils.clamp(spider.position.z, -12, 12);
-
-  const actualSpeed = len > 0 ? moveSpeed : 0;
-
-  for (const leg of legs) {
-    const attachLocal = getAttachLocal(leg.angle, leg.side);
-    const attachWorld = attachLocal.clone().applyAxisAngle(_yAxis, spider.rotation.y).add(spider.position);
-    leg.target.copy(getFootTarget(leg, spider.rotation.y, actualSpeed, t));
-
-    leg.joints[0].copy(attachWorld);
-    _dir.subVectors(leg.target, leg.joints[0]).normalize();
-    leg.joints[1].copy(leg.joints[0]).add(_dir.clone().multiplyScalar(leg.boneLengths[0]));
-    leg.joints[2].copy(leg.joints[1]).add(_dir.clone().multiplyScalar(leg.boneLengths[1]));
-    leg.joints[3].copy(leg.joints[2]).add(_dir.clone().multiplyScalar(leg.boneLengths[2]));
-
-    solveCCD(leg.joints, leg.boneLengths, leg.target, ikIter, MAX_ANG);
-    updateLegVisual(leg);
-  }
-
-  controls.target.lerp(
-    new THREE.Vector3(spider.position.x, 0.35, spider.position.z),
-    0.06
-  );
   controls.update();
   renderer.render(scene, camera);
 }

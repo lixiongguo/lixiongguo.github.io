@@ -49,10 +49,10 @@
 
 - slug: ik-spider
   title: IK 蜘蛛
-  description: CCD 逆运动学驱动八足蜘蛛在简易场景中行走，WASD 控制移动，可显示 IK 链与调节迭代次数。
+  description: CCD 逆运动学驱动 Spider Tank 的六条腿。三足步态生成足端目标，WASD 移动，可显示 IK 链并调节迭代次数。
   thumbnail: /assets/gallery/ik-spider.svg
   detail_url: "/gallery/ik-spider.html"
-  ready: false
+  ready: true
 
 - slug: neural-ot
   title: Neural Lagrangian OT
