@@ -50,7 +50,7 @@
 - slug: ik-spider
   title: IK 蜘蛛
   description: CCD 逆运动学驱动 Spider Tank 的六条腿。三足步态生成足端目标，WASD 移动，可显示 IK 链并调节迭代次数。
-  thumbnail: /assets/gallery/ik-spider.svg
+  thumbnail: /assets/gallery/ik-spider.png
   detail_url: "/gallery/ik-spider.html"
   ready: true
 
