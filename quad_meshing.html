@@ -47,6 +47,7 @@
       font-size: 13px;
       color: #cfcfcf;
     }
+    .toolbar label[hidden] { display: none; }
     select {
       background: #1d1d1d;
       color: #f0f0f0;
@@ -56,20 +57,6 @@
       font: inherit;
       font-size: 13px;
     }
-    button, select {
-      font: inherit;
-      font-size: 13px;
-    }
-    button {
-      background: #e87d0d;
-      color: #1d1d1d;
-      border: none;
-      border-radius: 4px;
-      padding: 6px 12px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button:disabled { opacity: 0.45; cursor: default; }
     input[type="checkbox"], input[type="range"] { accent-color: #e87d0d; }
     input[type="range"] { width: 88px; }
     .stats {
@@ -78,6 +65,37 @@
       color: #bdbdbd;
       font-variant-numeric: tabular-nums;
     }
+    details.timing {
+      font-size: 12px;
+      color: #bdbdbd;
+    }
+    details.timing summary {
+      cursor: pointer;
+      user-select: none;
+    }
+    details.timing[open] { flex-basis: 100%; }
+    details.timing ol {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 16px;
+      margin: 6px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    #timing-list li.run { color: #e87d0d; }
+    #timing-list li.skip { color: #8a8a8a; }
+    #timing-list li.stop, #timing-list li.fail { color: #e07070; }
+    button.stop {
+      background: transparent;
+      color: #f0c9a0;
+      border: 1px solid #e87d0d;
+      border-radius: 4px;
+      padding: 5px 10px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+    }
+    button.stop[hidden] { display: none; }
     .viewport { flex: 1; min-height: 0; position: relative; background: #393939; }
     canvas { display: block; width: 100%; height: 100%; }
   </style>
@@ -89,12 +107,22 @@
       <label>模型
         <select id="model-select"></select>
       </label>
-      <button id="run-miq" type="button">MIQ</button>
-      <label>密度 <input id="grid-div" type="range" min="4" max="28" value="10"></label>
-      <label><input type="checkbox" id="show-curvature" checked> 主曲率</label>
+      <label>算法
+        <select id="algo-select">
+          <option value="naive" selected>朴素合并</option>
+          <option value="miq">MIQ</option>
+          <option value="quadcover">QuadCover</option>
+        </select>
+      </label>
+      <label id="density-label" hidden>密度 <input id="grid-div" type="range" min="4" max="28" value="10"></label>
       <label><input type="checkbox" id="show-surface" checked> 表面</label>
       <label><input type="checkbox" id="show-wire" checked> 线框</label>
+      <button type="button" class="stop" id="stop-run" hidden>停止</button>
       <div class="stats" id="stats">正在加载…</div>
+      <details class="timing" id="timing-panel">
+        <summary id="timing-summary">流水线耗时</summary>
+        <ol id="timing-list"></ol>
+      </details>
     </div>
     <div class="viewport">
       <canvas id="view"></canvas>
@@ -120,9 +148,13 @@
       : FALLBACK_MODELS;
 
     const modelSelect = document.getElementById("model-select");
-    const runButton = document.getElementById("run-miq");
+    const algoSelect = document.getElementById("algo-select");
+    const densityLabel = document.getElementById("density-label");
     const gridDiv = document.getElementById("grid-div");
-    const showCurvature = document.getElementById("show-curvature");
+    const timingPanel = document.getElementById("timing-panel");
+    const timingSummary = document.getElementById("timing-summary");
+    const timingList = document.getElementById("timing-list");
+    const stopButton = document.getElementById("stop-run");
     const showSurface = document.getElementById("show-surface");
     const showWire = document.getElementById("show-wire");
     const statsEl = document.getElementById("stats");
@@ -172,11 +204,8 @@
     });
     const quadLineMaterial = new THREE.LineBasicMaterial({ color: 0x1c1c1c });
     const triLineMaterial = new THREE.LineBasicMaterial({ color: 0x6b3a16 });
-    const curvatureK1Material = new THREE.LineBasicMaterial({ color: 0xe87d0d });
-    const curvatureK2Material = new THREE.LineBasicMaterial({ color: 0x6aa8ff });
 
     let currentRoot = null;
-    let curvatureGroup = null;
 
     function edgeKey(a, b) {
       return a < b ? a + "_" + b : b + "_" + a;
@@ -266,10 +295,6 @@
       return [nx / len, ny / len, nz / len];
     }
 
-    function paint() {
-      return new Promise(function (resolve) { requestAnimationFrame(function () { resolve(); }); });
-    }
-
     function loadClassicScript(src) {
       return new Promise(function (resolve, reject) {
         const existing = document.querySelector('script[data-quad-src="' + src + '"]');
@@ -287,23 +312,16 @@
       });
     }
 
-    let fieldInst = null;
-    let wasmChain = Promise.resolve();
-    function afterWasm(task) {
-      const next = wasmChain.then(task, task);
-      wasmChain = next.then(function () {}, function () {});
-      return next;
-    }
-
-    async function fieldSolver() {
-      if (fieldInst) return fieldInst;
+    let mergeInst = null;
+    async function mergeSolver() {
+      if (mergeInst) return mergeInst;
       await loadClassicScript("assets/js/wasm-loader.js");
-      await loadClassicScript("assets/wasm/uv_unwrap_field.js");
-      if (typeof window.UvUnwrapFieldSolver !== "function") throw new Error("MIQ 引擎未加载");
-      fieldInst = await window.UvUnwrapFieldSolver({
+      await loadClassicScript("assets/wasm/naive_quad.js");
+      if (typeof window.NaiveQuadMerge !== "function") throw new Error("合并模块未加载");
+      mergeInst = await window.NaiveQuadMerge({
         locateFile: function (file) { return "assets/wasm/" + file; }
       });
-      return fieldInst;
+      return mergeInst;
     }
 
     function wasmWriteDoubles(inst, values) {
@@ -318,107 +336,19 @@
       return ptr;
     }
 
-    function lerp3(a, b, t) {
-      return [
-        a[0] + (b[0] - a[0]) * t,
-        a[1] + (b[1] - a[1]) * t,
-        a[2] + (b[2] - a[2]) * t
-      ];
+    function readFaces(inst, ptr, count, stride) {
+      const faces = new Array(count);
+      for (let i = 0; i < count; i++) {
+        const face = new Array(stride);
+        const base = ptr + i * stride * 4;
+        for (let k = 0; k < stride; k++) face[k] = inst.getValue(base + k * 4, "i32");
+        faces[i] = face;
+      }
+      return faces;
     }
 
-    function gridStep(span, divisions) {
-      let k = Math.round(divisions / Math.max(span, 1e-6));
-      if (k < 1) k = 1;
-      if (k > 8) k = 8;
-      return 1 / k;
-    }
-
-    // 割缝两侧的整数等值线才对得上。用每个三角形自己的角点 UV 画这些线，
-    // 而不是把割缝上的多份坐标平均成一个顶点后再反查格点。
-    function traceGrid(positions, faces, corners, divisions) {
-      let uMin = Infinity, vMin = Infinity, uMax = -Infinity, vMax = -Infinity;
-      for (let fi = 0; fi < corners.length; fi++) {
-        const q = corners[fi];
-        for (let k = 0; k < 3; k++) {
-          const u = q[k][0], v = q[k][1];
-          if (!Number.isFinite(u) || !Number.isFinite(v)) continue;
-          if (u < uMin) uMin = u;
-          if (v < vMin) vMin = v;
-          if (u > uMax) uMax = u;
-          if (v > vMax) vMax = v;
-        }
-      }
-      const span = Math.max(uMax - uMin, vMax - vMin) || 1;
-      const step = gridStep(span, divisions);
-      const positionsOut = [];
-      const seen = new Set();
-      const cells = new Set();
-
-      function quant(p) {
-        return Math.round(p[0] * 1e5) + "," + Math.round(p[1] * 1e5) + "," + Math.round(p[2] * 1e5);
-      }
-
-      function addSegment(a, b) {
-        const ka = quant(a);
-        const kb = quant(b);
-        if (ka === kb) return;
-        const key = ka < kb ? ka + "|" + kb : kb + "|" + ka;
-        if (seen.has(key)) return;
-        seen.add(key);
-        positionsOut.push(a[0], a[1], a[2], b[0], b[1], b[2]);
-      }
-
-      function cut(p, q, axis, value) {
-        const hits = [];
-        for (let e = 0; e < 3; e++) {
-          const i0 = e;
-          const i1 = (e + 1) % 3;
-          const d = q[i1][axis] - q[i0][axis];
-          if (Math.abs(d) < 1e-14) continue;
-          const t = (value - q[i0][axis]) / d;
-          if (t < -1e-6 || t > 1 + 1e-6) continue;
-          hits.push(lerp3(p[i0], p[i1], Math.min(1, Math.max(0, t))));
-        }
-        if (hits.length >= 2) addSegment(hits[0], hits[1]);
-      }
-
-      for (let fi = 0; fi < faces.length; fi++) {
-        const f = faces[fi];
-        const q = corners[fi];
-        if (!q) continue;
-        let finite = true;
-        for (let k = 0; k < 3; k++) {
-          if (!Number.isFinite(q[k][0]) || !Number.isFinite(q[k][1])) finite = false;
-        }
-        if (!finite) continue;
-        let tuMin = Infinity, tuMax = -Infinity, tvMin = Infinity, tvMax = -Infinity;
-        for (let k = 0; k < 3; k++) {
-          if (q[k][0] < tuMin) tuMin = q[k][0];
-          if (q[k][0] > tuMax) tuMax = q[k][0];
-          if (q[k][1] < tvMin) tvMin = q[k][1];
-          if (q[k][1] > tvMax) tvMax = q[k][1];
-        }
-        if ((tuMax - tuMin) / step > 16 || (tvMax - tvMin) / step > 16) continue;
-        const p = [positions[f[0]], positions[f[1]], positions[f[2]]];
-        const iu0 = Math.ceil(tuMin / step - 1e-8);
-        const iu1 = Math.floor(tuMax / step + 1e-8);
-        for (let i = iu0; i <= iu1; i++) cut(p, q, 0, i * step);
-        const iv0 = Math.ceil(tvMin / step - 1e-8);
-        const iv1 = Math.floor(tvMax / step + 1e-8);
-        for (let i = iv0; i <= iv1; i++) cut(p, q, 1, i * step);
-        const cu0 = Math.floor(tuMin / step);
-        const cu1 = Math.floor((tuMax - 1e-8) / step);
-        const cv0 = Math.floor(tvMin / step);
-        const cv1 = Math.floor((tvMax - 1e-8) / step);
-        for (let iu = cu0; iu <= cu1; iu++) {
-          for (let iv = cv0; iv <= cv1; iv++) cells.add(iu + "_" + iv);
-        }
-      }
-      return { positions: positionsOut, cells: cells.size, step: step };
-    }
-
-    async function solveMIQUV(verts, faces) {
-      const inst = await fieldSolver();
+    async function mergeTriangles(verts, faces) {
+      const inst = await mergeSolver();
       const flatPos = new Float64Array(verts.length * 3);
       for (let i = 0; i < verts.length; i++) {
         flatPos[i * 3] = verts[i][0];
@@ -434,40 +364,154 @@
       const posPtr = wasmWriteDoubles(inst, flatPos);
       const facePtr = wasmWriteInts(inst, flatFaces);
       try {
-        let rc = inst.ccall("load_mesh", "number", ["number", "number", "number", "number"], [posPtr, flatPos.length, facePtr, flatFaces.length]);
-        if (rc !== 0) throw new Error("load_mesh " + rc);
-        await paint();
-        rc = inst.ccall("solve_miq", "number", ["number", "number"], [12, 2]);
-        if (rc !== 0) throw new Error("MIQ 失败 (" + rc + ")");
-        const count = inst.ccall("get_uv_result_size", "number", [], []);
-        const ptr = inst.ccall("get_uv_result", "number", [], []);
-        const uv = new Array(verts.length);
-        for (let i = 0; i < verts.length; i++) {
-          uv[i] = [inst.getValue(ptr + (i * 2) * 8, "double"), inst.getValue(ptr + (i * 2 + 1) * 8, "double")];
-        }
-        if (count < verts.length * 2) throw new Error("UV 数量不足");
-        const cornerCount = inst.ccall("get_corner_uv_size", "number", [], []);
-        if (cornerCount < faces.length * 6) throw new Error("缺少三角形角点坐标");
-        const cornerPtr = inst.ccall("get_corner_uv", "number", [], []);
-        const corners = new Array(faces.length);
-        for (let fi = 0; fi < faces.length; fi++) {
-          const base = cornerPtr + fi * 48;
-          corners[fi] = [
-            [inst.getValue(base, "double"), inst.getValue(base + 8, "double")],
-            [inst.getValue(base + 16, "double"), inst.getValue(base + 24, "double")],
-            [inst.getValue(base + 32, "double"), inst.getValue(base + 40, "double")]
-          ];
-        }
-        const timeMs = inst.ccall("get_last_time_ms", "number", [], []);
-        inst.ccall("dispose", "void", [], []);
-        return { uv: uv, corners: corners, timeMs: timeMs };
+        const t0 = performance.now();
+        const rc = inst.ccall(
+          "merge_tris_to_quads", "number",
+          ["number", "number", "number", "number"],
+          [posPtr, verts.length, facePtr, faces.length]
+        );
+        if (rc !== 0) throw new Error("merge " + rc);
+        const quadCount = inst.ccall("get_quad_count", "number", [], []);
+        const quadPtr = inst.ccall("get_quads", "number", [], []);
+        const triCount = inst.ccall("get_leftover_count", "number", [], []);
+        const triPtr = inst.ccall("get_leftovers", "number", [], []);
+        const quads = quadCount > 0 ? readFaces(inst, quadPtr, quadCount, 4) : [];
+        const leftovers = triCount > 0 ? readFaces(inst, triPtr, triCount, 3) : [];
+        return { quads: quads, leftovers: leftovers, stages: readStages(inst), timeMs: performance.now() - t0 };
       } finally {
         inst._free(posPtr);
         inst._free(facePtr);
       }
     }
 
-    function uploadMesh(inst, verts, faces) {
+    function readStages(inst) {
+      const count = inst.ccall("get_stage_count", "number", [], []);
+      const stages = [];
+      for (let i = 0; i < count; i++) {
+        stages.push({
+          name: inst.ccall("get_stage_name", "string", ["number"], [i]) || ("阶段 " + (i + 1)),
+          ms: inst.ccall("get_stage_ms", "number", ["number"], [i])
+        });
+      }
+      return stages;
+    }
+
+    function formatMs(ms) {
+      if (!Number.isFinite(ms)) return "—";
+      if (ms < 10) return ms.toFixed(1) + " ms";
+      if (ms < 1000) return Math.round(ms) + " ms";
+      return (ms / 1000).toFixed(1) + " s";
+    }
+
+    function showStages(stages) {
+      timingList.replaceChildren();
+      let total = 0;
+      for (let i = 0; i < stages.length; i++) {
+        total += stages[i].ms || 0;
+        const item = document.createElement("li");
+        item.dataset.name = stages[i].name;
+        item.dataset.state = stages[i].skipped ? "skip" : "done";
+        item.dataset.ms = String(stages[i].ms || 0);
+        item.className = item.dataset.state;
+        item.textContent = stages[i].skipped
+          ? stages[i].name + " · 跳过"
+          : stages[i].name + " " + formatMs(stages[i].ms);
+        timingList.appendChild(item);
+      }
+      timingSummary.textContent = stages.length ? ("流水线 · " + formatMs(total)) : "流水线耗时";
+    }
+
+    function showPlan(names) {
+      timingList.replaceChildren();
+      for (let i = 0; i < names.length; i++) {
+        const item = document.createElement("li");
+        item.dataset.name = names[i];
+        item.dataset.state = "wait";
+        item.textContent = names[i];
+        timingList.appendChild(item);
+      }
+      timingPanel.open = true;
+      timingSummary.textContent = "流水线 · " + names.length + " 个阶段";
+    }
+
+    function refreshSummary() {
+      let total = 0;
+      let current = "";
+      for (const item of timingList.children) {
+        if (item.dataset.state === "done") total += Number(item.dataset.ms) || 0;
+        if (item.dataset.state === "run") current = item.dataset.name;
+      }
+      timingSummary.textContent = current ? ("流水线 · " + current) : ("流水线 · " + formatMs(total));
+    }
+
+    function markStage(index, state, ms) {
+      const item = timingList.children[index];
+      if (!item) return;
+      const name = item.dataset.name || ("阶段 " + (index + 1));
+      item.dataset.state = state;
+      item.className = state;
+      if (state === "run") item.textContent = name + " · 进行中";
+      else if (state === "done") {
+        item.dataset.ms = String(ms || 0);
+        item.textContent = name + " " + formatMs(ms);
+      } else if (state === "skip") item.textContent = name + " · 跳过";
+      else if (state === "stop") item.textContent = name + " · 已停止";
+      else if (state === "fail") item.textContent = name + " · 失败";
+      else item.textContent = name;
+      refreshSummary();
+    }
+
+    function markProgress(done, total) {
+      let current = null;
+      for (const item of timingList.children) {
+        if (item.dataset.state === "run") current = item;
+      }
+      if (!current || !(total > 0)) return;
+      const pct = Math.max(0, Math.min(100, Math.round((done * 100) / total)));
+      current.dataset.pct = String(pct);
+      current.textContent = current.dataset.name + " · " + pct + "%";
+      timingSummary.textContent = "流水线 · " + current.dataset.name + " " + pct + "%";
+    }
+
+    function markStopped() {
+      for (const item of timingList.children) {
+        if (item.dataset.state === "run" || item.dataset.state === "wait") {
+          item.dataset.state = "stop";
+          item.className = "stop";
+          item.textContent = item.dataset.name + " · 已停止";
+        }
+      }
+      timingSummary.textContent = "流水线 · 已停止";
+    }
+
+    function collectStages() {
+      const stages = [];
+      for (const item of timingList.children) {
+        stages.push({
+          name: item.dataset.name,
+          ms: Number(item.dataset.ms) || 0,
+          skipped: item.dataset.state === "skip"
+        });
+      }
+      return stages;
+    }
+
+    function paint() {
+      return new Promise(function (resolve) { requestAnimationFrame(function () { resolve(); }); });
+    }
+
+    let fieldInst = null;
+    async function fieldSolver() {
+      if (fieldInst) return fieldInst;
+      await loadClassicScript("assets/wasm/uv_unwrap_field.js");
+      if (typeof window.UvUnwrapFieldSolver !== "function") throw new Error("场求解模块未加载");
+      fieldInst = await window.UvUnwrapFieldSolver({
+        locateFile: function (file) { return "assets/wasm/" + file; }
+      });
+      return fieldInst;
+    }
+
+    function uploadFieldMesh(inst, verts, faces) {
       const flatPos = new Float64Array(verts.length * 3);
       for (let i = 0; i < verts.length; i++) {
         flatPos[i * 3] = verts[i][0];
@@ -488,83 +532,144 @@
       if (rc !== 0) throw new Error("load_mesh " + rc);
     }
 
-    // QuadCover 的交叉场来自 Weingarten 主曲率方向（PrincipalCurvatureField::estimateFromWeingarten）。
-    async function computePrincipalDirs(verts, faces) {
+    async function solveField(algo, verts, faces) {
       const inst = await fieldSolver();
+      uploadFieldMesh(inst, verts, faces);
+      await paint();
       const t0 = performance.now();
-      uploadMesh(inst, verts, faces);
-      const rc = inst.ccall("step1_compute_principal_field", "number", [], []);
-      if (rc !== 0) throw new Error("主曲率失败 (" + rc + ")");
-      const count = inst.ccall("get_face_dirs_size", "number", [], []);
-      const ptr = inst.ccall("get_face_dirs", "number", [], []);
-      if (!ptr || count < faces.length * 3) throw new Error("主曲率方向数量不足");
-      let dirs;
-      if (inst.HEAPF64 && (ptr % 8) === 0) dirs = inst.HEAPF64.slice(ptr >> 3, (ptr >> 3) + count);
-      else {
-        dirs = new Float64Array(count);
-        for (let i = 0; i < count; i++) dirs[i] = inst.getValue(ptr + i * 8, "double");
+      let rc = 0;
+      if (algo === "miq") rc = inst.ccall("solve_miq", "number", ["number", "number"], [12, 2]);
+      else rc = inst.ccall("step3_solve_quadcover", "number", ["number"], [1]);
+      if (rc !== 0) {
+        const failed = new Error((algo === "miq" ? "MIQ" : "QuadCover") + " 失败 (" + rc + ")");
+        failed.stages = readStages(inst);
+        inst.ccall("dispose", "void", [], []);
+        throw failed;
+      }
+      const stages = readStages(inst);
+      const solverMs = inst.ccall("get_last_time_ms", "number", [], []);
+      const uvCount = inst.ccall("get_uv_result_size", "number", [], []);
+      const uvPtr = inst.ccall("get_uv_result", "number", [], []);
+      if (!uvPtr || uvCount < verts.length * 2) throw new Error("没有参数化坐标");
+      const uv = new Array(verts.length);
+      for (let i = 0; i < verts.length; i++) {
+        uv[i] = [
+          inst.getValue(uvPtr + (i * 2) * 8, "double"),
+          inst.getValue(uvPtr + (i * 2 + 1) * 8, "double")
+        ];
+      }
+      let corners = null;
+      const cornerCount = inst.ccall("get_corner_uv_size", "number", [], []);
+      const cornerPtr = inst.ccall("get_corner_uv", "number", [], []);
+      if (cornerPtr && cornerCount >= faces.length * 6) {
+        corners = new Array(faces.length);
+        for (let fi = 0; fi < faces.length; fi++) {
+          const base = cornerPtr + fi * 48;
+          corners[fi] = [
+            [inst.getValue(base, "double"), inst.getValue(base + 8, "double")],
+            [inst.getValue(base + 16, "double"), inst.getValue(base + 24, "double")],
+            [inst.getValue(base + 32, "double"), inst.getValue(base + 40, "double")]
+          ];
+        }
       }
       inst.ccall("dispose", "void", [], []);
-      return { dirs: dirs, timeMs: performance.now() - t0 };
+      if (!stages.length) stages.push({ name: algo === "miq" ? "MIQ" : "QuadCover", ms: solverMs || (performance.now() - t0) });
+      return { uv: uv, corners: corners, stages: stages, timeMs: solverMs || (performance.now() - t0) };
     }
 
-    function clearCurvature() {
-      if (!curvatureGroup) return;
-      scene.remove(curvatureGroup);
-      disposeRoot(curvatureGroup);
-      curvatureGroup = null;
+    function lerp3(a, b, t) {
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
     }
 
-    function buildCurvatureLines(verts, faces, dirs) {
-      const step = faces.length > 8000 ? Math.ceil(faces.length / 6000) : 1;
-      const k1 = [];
-      const k2 = [];
-      for (let fi = 0; fi < faces.length; fi += step) {
+    function traceGrid(verts, faces, uv, corners, divisions) {
+      let uMin = Infinity, vMin = Infinity, uMax = -Infinity, vMax = -Infinity;
+      function uvAt(fi, k) {
+        if (corners) return corners[fi][k];
+        return uv[faces[fi][k]];
+      }
+      for (let fi = 0; fi < faces.length; fi++) {
+        for (let k = 0; k < 3; k++) {
+          const q = uvAt(fi, k);
+          if (!q || !Number.isFinite(q[0]) || !Number.isFinite(q[1])) continue;
+          if (q[0] < uMin) uMin = q[0];
+          if (q[1] < vMin) vMin = q[1];
+          if (q[0] > uMax) uMax = q[0];
+          if (q[1] > vMax) vMax = q[1];
+        }
+      }
+      const span = Math.max(uMax - uMin, vMax - vMin);
+      if (!(span > 1e-8)) throw new Error("参数化坐标没有展开");
+      const scale = divisions / span;
+      const positions = [];
+      const seen = new Set();
+      const cells = new Set();
+
+      function quant(p) {
+        return Math.round(p[0] * 1e5) + "," + Math.round(p[1] * 1e5) + "," + Math.round(p[2] * 1e5);
+      }
+      function addSegment(a, b) {
+        const ka = quant(a);
+        const kb = quant(b);
+        if (ka === kb) return;
+        const key = ka < kb ? ka + "|" + kb : kb + "|" + ka;
+        if (seen.has(key)) return;
+        seen.add(key);
+        positions.push(a[0], a[1], a[2], b[0], b[1], b[2]);
+      }
+      function bary(q, p) {
+        const d00 = (q[1][0] - q[0][0]) * (q[1][0] - q[0][0]) + (q[1][1] - q[0][1]) * (q[1][1] - q[0][1]);
+        const d01 = (q[1][0] - q[0][0]) * (q[2][0] - q[0][0]) + (q[1][1] - q[0][1]) * (q[2][1] - q[0][1]);
+        const d11 = (q[2][0] - q[0][0]) * (q[2][0] - q[0][0]) + (q[2][1] - q[0][1]) * (q[2][1] - q[0][1]);
+        const d20 = (p[0] - q[0][0]) * (q[1][0] - q[0][0]) + (p[1] - q[0][1]) * (q[1][1] - q[0][1]);
+        const d21 = (p[0] - q[0][0]) * (q[2][0] - q[0][0]) + (p[1] - q[0][1]) * (q[2][1] - q[0][1]);
+        const den = d00 * d11 - d01 * d01;
+        if (Math.abs(den) < 1e-14) return false;
+        const v = (d11 * d20 - d01 * d21) / den;
+        const w = (d00 * d21 - d01 * d20) / den;
+        const u = 1 - v - w;
+        return u >= -1e-4 && v >= -1e-4 && w >= -1e-4;
+      }
+
+      for (let fi = 0; fi < faces.length; fi++) {
         const f = faces[fi];
-        const p0 = verts[f[0]];
-        const p1 = verts[f[1]];
-        const p2 = verts[f[2]];
-        const c = [(p0[0] + p1[0] + p2[0]) / 3, (p0[1] + p1[1] + p2[1]) / 3, (p0[2] + p1[2] + p2[2]) / 3];
-        const e1x = p1[0] - p0[0], e1y = p1[1] - p0[1], e1z = p1[2] - p0[2];
-        const e2x = p2[0] - p0[0], e2y = p2[1] - p0[1], e2z = p2[2] - p0[2];
-        let nx = e1y * e2z - e1z * e2y;
-        let ny = e1z * e2x - e1x * e2z;
-        let nz = e1x * e2y - e1y * e2x;
-        const area2 = Math.hypot(nx, ny, nz);
-        if (area2 < 1e-12) continue;
-        nx /= area2; ny /= area2; nz /= area2;
-        let dx = dirs[fi * 3], dy = dirs[fi * 3 + 1], dz = dirs[fi * 3 + 2];
-        const nd = dx * nx + dy * ny + dz * nz;
-        dx -= nd * nx; dy -= nd * ny; dz -= nd * nz;
-        const dlen = Math.hypot(dx, dy, dz);
-        if (dlen < 1e-8) continue;
-        dx /= dlen; dy /= dlen; dz /= dlen;
-        const ox = ny * dz - nz * dy;
-        const oy = nz * dx - nx * dz;
-        const oz = nx * dy - ny * dx;
-        const half = Math.sqrt(area2) * 0.22;
-        const lift = 0.003;
-        const ox0 = c[0] + nx * lift, oy0 = c[1] + ny * lift, oz0 = c[2] + nz * lift;
-        k1.push(ox0 - dx * half, oy0 - dy * half, oz0 - dz * half, ox0 + dx * half, oy0 + dy * half, oz0 + dz * half);
-        k2.push(ox0 - ox * half, oy0 - oy * half, oz0 - oz * half, ox0 + ox * half, oy0 + oy * half, oz0 + oz * half);
+        const p = [verts[f[0]], verts[f[1]], verts[f[2]]];
+        const raw = [uvAt(fi, 0), uvAt(fi, 1), uvAt(fi, 2)];
+        if (raw.some(function (q) { return !q || !Number.isFinite(q[0]) || !Number.isFinite(q[1]); })) continue;
+        const q = raw.map(function (c) { return [(c[0] - uMin) * scale, (c[1] - vMin) * scale]; });
+        for (let axis = 0; axis < 2; axis++) {
+          let lo = Math.min(q[0][axis], q[1][axis], q[2][axis]);
+          let hi = Math.max(q[0][axis], q[1][axis], q[2][axis]);
+          for (let g = Math.ceil(lo - 1e-8); g <= Math.floor(hi + 1e-8); g++) {
+            const hits = [];
+            for (let e = 0; e < 3; e++) {
+              const i0 = e;
+              const i1 = (e + 1) % 3;
+              const d = q[i1][axis] - q[i0][axis];
+              if (Math.abs(d) < 1e-12) continue;
+              const t = (g - q[i0][axis]) / d;
+              if (t < -1e-5 || t > 1 + 1e-5) continue;
+              hits.push(lerp3(p[i0], p[i1], Math.min(1, Math.max(0, t))));
+            }
+            const uniq = [];
+            for (let h = 0; h < hits.length; h++) {
+              if (!uniq.some(function (u) { return Math.hypot(u[0] - hits[h][0], u[1] - hits[h][1], u[2] - hits[h][2]) < 1e-7; })) uniq.push(hits[h]);
+            }
+            if (uniq.length >= 2) addSegment(uniq[0], uniq[1]);
+          }
+        }
+        const u0 = Math.floor(Math.min(q[0][0], q[1][0], q[2][0]));
+        const u1 = Math.floor(Math.max(q[0][0], q[1][0], q[2][0]) - 1e-8);
+        const v0 = Math.floor(Math.min(q[0][1], q[1][1], q[2][1]));
+        const v1 = Math.floor(Math.max(q[0][1], q[1][1], q[2][1]) - 1e-8);
+        for (let iu = u0; iu <= u1; iu++) {
+          for (let iv = v0; iv <= v1; iv++) {
+            const inside = [[iu, iv], [iu + 1, iv], [iu + 1, iv + 1], [iu, iv + 1]].some(function (c) { return bary(q, c); });
+            const covers = q.some(function (c) { return c[0] >= iu && c[0] <= iu + 1 && c[1] >= iv && c[1] <= iv + 1; });
+            if (inside || covers) cells.add(iu + "_" + iv);
+          }
+        }
       }
-      const group = new THREE.Group();
-      group.name = "curvature";
-      if (k1.length) {
-        const lines = makeLines(k1, curvatureK1Material);
-        lines.userData.wire = false;
-        group.add(lines);
-      }
-      if (k2.length) {
-        const lines = makeLines(k2, curvatureK2Material);
-        lines.userData.wire = false;
-        group.add(lines);
-      }
-      return group;
-    }
-
-    function applyCurvatureVisibility() {
-      if (curvatureGroup) curvatureGroup.visible = showCurvature.checked;
+      return { positions: positions, cells: cells.size };
     }
 
     function pushTriangle(positions, normals, verts, i0, i1, i2, normal) {
@@ -576,13 +681,23 @@
       }
     }
 
-    function pushEdge(out, seen, verts, i, j) {
-      const key = edgeKey(i, j);
-      if (seen.has(key)) return;
-      seen.add(key);
-      const p = verts[i];
-      const q = verts[j];
-      out.push(p[0], p[1], p[2], q[0], q[1], q[2]);
+    function boundaryPositions(verts, faces, skip) {
+      const out = [];
+      const seen = new Set();
+      for (let i = 0; i < faces.length; i++) {
+        const f = faces[i];
+        for (let k = 0; k < f.length; k++) {
+          const a = f[k];
+          const b = f[(k + 1) % f.length];
+          const key = edgeKey(a, b);
+          if (seen.has(key) || (skip && skip.has(key))) continue;
+          seen.add(key);
+          const p = verts[a];
+          const q = verts[b];
+          out.push(p[0], p[1], p[2], q[0], q[1], q[2]);
+        }
+      }
+      return out;
     }
 
     function makeMesh(positions, normals, material) {
@@ -606,33 +721,45 @@
       for (let i = 0; i < faces.length; i++) {
         const f = faces[i];
         const normal = newellNormal(verts, f);
-        for (let k = 1; k < f.length - 1; k++) {
-          pushTriangle(pos, nrm, verts, f[0], f[k], f[k + 1], normal);
-        }
-      }
-      return makeMesh(pos, nrm, material);
-    }
-
-    function buildPolygonObject(verts, faces, material, lineMaterial) {
-      const pos = [];
-      const nrm = [];
-      const edgePos = [];
-      const seen = new Set();
-      for (let i = 0; i < faces.length; i++) {
-        const f = faces[i];
-        const normal = newellNormal(verts, f);
         if (f.length === 3) {
           pushTriangle(pos, nrm, verts, f[0], f[1], f[2], normal);
         } else {
           pushTriangle(pos, nrm, verts, f[0], f[1], f[2], normal);
           pushTriangle(pos, nrm, verts, f[0], f[2], f[3], normal);
         }
-        for (let k = 0; k < f.length; k++) pushEdge(edgePos, seen, verts, f[k], f[(k + 1) % f.length]);
       }
-      const root = new THREE.Group();
-      if (pos.length) root.add(makeMesh(pos, nrm, material));
-      if (edgePos.length) root.add(makeLines(edgePos, lineMaterial));
-      return root;
+      return makeMesh(pos, nrm, material);
+    }
+
+    function buildSmoothSurface(verts, faces, material) {
+      const acc = new Array(verts.length);
+      for (let i = 0; i < verts.length; i++) acc[i] = [0, 0, 0];
+      for (let i = 0; i < faces.length; i++) {
+        const f = faces[i];
+        const n = newellNormal(verts, f);
+        for (let k = 0; k < f.length; k++) {
+          acc[f[k]][0] += n[0];
+          acc[f[k]][1] += n[1];
+          acc[f[k]][2] += n[2];
+        }
+      }
+      for (let i = 0; i < acc.length; i++) {
+        const len = Math.hypot(acc[i][0], acc[i][1], acc[i][2]);
+        if (len > 1e-12) { acc[i][0] /= len; acc[i][1] /= len; acc[i][2] /= len; }
+        else acc[i] = [0, 1, 0];
+      }
+      const pos = [];
+      const nrm = [];
+      for (let i = 0; i < faces.length; i++) {
+        const f = faces[i];
+        for (let k = 0; k < 3; k++) {
+          const v = verts[f[k]];
+          const n = acc[f[k]];
+          pos.push(v[0], v[1], v[2]);
+          nrm.push(n[0], n[1], n[2]);
+        }
+      }
+      return makeMesh(pos, nrm, material);
     }
 
     function disposeRoot(root) {
@@ -660,13 +787,10 @@
       renderer.setSize(width, height, false);
     }
 
-    let loadToken = 0;
-    let sourceMesh = null;
-    let cachedUV = null;
-    let solving = false;
-    let rerun = false;
-
-    function showRoot(root) {
+    function showField(verts, faces, grid) {
+      const root = new THREE.Group();
+      root.add(buildSmoothSurface(verts, faces, quadMaterial));
+      if (grid.positions.length) root.add(makeLines(grid.positions, quadLineMaterial));
       if (currentRoot) {
         scene.remove(currentRoot);
         disposeRoot(currentRoot);
@@ -676,104 +800,201 @@
       applyVisibility();
     }
 
-    function showInput(verts, faces) {
-      const root = buildPolygonObject(verts, faces, triMaterial, triLineMaterial);
-      showRoot(root);
-      statsEl.textContent = "输入三角网格 · 顶点 " + verts.length + " · 三角面 " + faces.length;
+    const ALGO_LABEL = { naive: "朴素合并", miq: "MIQ", quadcover: "QuadCover" };
+    let loadToken = 0;
+    let meshCache = null;
+    let fieldCache = null;
+    let activeWorker = null;
+    let activeRun = null;
+
+    function setBusy(busy) {
+      modelSelect.disabled = busy;
+      algoSelect.disabled = busy;
+      gridDiv.disabled = busy;
+      stopButton.hidden = !busy;
     }
 
-    function showQuads(verts, faces, grid, timeMs) {
-      if (!grid.positions.length) {
-        showInput(verts, faces);
-        statsEl.textContent = "MIQ 没有抽出四边网格线";
-        return;
+    function groupIndices(flat, stride) {
+      const faces = [];
+      for (let i = 0; i + stride <= flat.length; i += stride) {
+        const face = [];
+        for (let k = 0; k < stride; k++) face.push(flat[i + k]);
+        faces.push(face);
       }
-      const root = new THREE.Group();
-      root.add(buildSurface(verts, faces, quadMaterial));
-      root.add(makeLines(grid.positions, quadLineMaterial));
-      showRoot(root);
-      const seconds = (timeMs / 1000).toFixed(1);
-      statsEl.textContent = "MIQ · 四边单元 " + grid.cells + " · " + seconds + "s";
+      return faces;
     }
 
-    async function runMIQ() {
-      if (!sourceMesh) return;
-      if (solving) { rerun = true; return; }
-      const mesh = sourceMesh;
-      const token = mesh.token;
-      const divisions = Number(gridDiv.value) || 10;
-      solving = true;
-      runButton.disabled = true;
-      modelSelect.disabled = true;
-      gridDiv.disabled = true;
-      try {
-        if (!cachedUV || cachedUV.token !== token) {
-          statsEl.textContent = "MIQ 求解中…";
-          await paint();
-          const solved = await afterWasm(function () { return solveMIQUV(mesh.verts, mesh.faces); });
-          if (token !== loadToken) return;
-          cachedUV = { token: token, corners: solved.corners, timeMs: solved.timeMs };
-        }
-        const grid = traceGrid(mesh.verts, mesh.faces, cachedUV.corners, divisions);
-        if (token !== loadToken) return;
-        showQuads(mesh.verts, mesh.faces, grid, cachedUV.timeMs);
-      } catch (error) {
-        if (token !== loadToken) return;
-        statsEl.textContent = "MIQ 失败：" + (error && error.message ? error.message : error);
-      } finally {
-        solving = false;
-        if (token === loadToken) {
-          runButton.disabled = false;
-          modelSelect.disabled = false;
-          gridDiv.disabled = false;
-        }
-        if (rerun) {
-          rerun = false;
-          if (sourceMesh && sourceMesh.token === loadToken) runMIQ();
-        }
+    function uvPairs(flat, count) {
+      const uv = new Array(count);
+      for (let i = 0; i < count; i++) uv[i] = [flat[i * 2], flat[i * 2 + 1]];
+      return uv;
+    }
+
+    function cornerPairs(flat, nFaces) {
+      if (!flat || flat.length < nFaces * 6) return null;
+      const corners = new Array(nFaces);
+      for (let fi = 0; fi < nFaces; fi++) {
+        const base = fi * 6;
+        corners[fi] = [
+          [flat[base], flat[base + 1]],
+          [flat[base + 2], flat[base + 3]],
+          [flat[base + 4], flat[base + 5]]
+        ];
       }
+      return corners;
     }
 
-    async function loadModel(file) {
+    function runInWorker(algo, verts, faces) {
+      const positions = new Float64Array(verts.length * 3);
+      const faceIdx = new Int32Array(faces.length * 3);
+      for (let i = 0; i < verts.length; i++) {
+        positions[i * 3] = verts[i][0];
+        positions[i * 3 + 1] = verts[i][1];
+        positions[i * 3 + 2] = verts[i][2];
+      }
+      for (let i = 0; i < faces.length; i++) {
+        faceIdx[i * 3] = faces[i][0];
+        faceIdx[i * 3 + 1] = faces[i][1];
+        faceIdx[i * 3 + 2] = faces[i][2];
+      }
+      return new Promise(function (resolve, reject) {
+        const worker = new Worker("assets/js/quad_mesh_worker.js");
+        activeWorker = worker;
+        let settled = false;
+        function finish(fn, value) {
+          if (settled) return;
+          settled = true;
+          worker.terminate();
+          if (activeWorker === worker) activeWorker = null;
+          activeRun = null;
+          worker.onmessage = null;
+          worker.onerror = null;
+          fn(value);
+        }
+        activeRun = {
+          stop: function () { finish(resolve, { stopped: true }); }
+        };
+        worker.onmessage = function (event) {
+          const msg = event.data;
+          if (!msg) return;
+          if (msg.type === "plan") showPlan(msg.names);
+          else if (msg.type === "progress") markProgress(msg.done, msg.total);
+          else if (msg.type === "stage") markStage(msg.index, msg.state, msg.ms);
+          else if (msg.type === "result") finish(resolve, msg);
+          else if (msg.type === "error") finish(reject, new Error(msg.message || "求解失败"));
+        };
+        worker.onerror = function (event) {
+          finish(reject, new Error(event.message || "求解线程出错"));
+        };
+        worker.postMessage({
+          type: "run",
+          algo: algo,
+          positions: positions,
+          faces: faceIdx,
+          nVerts: verts.length,
+          nFaces: faces.length
+        }, [positions.buffer, faceIdx.buffer]);
+      });
+    }
+
+    function requestStop() {
+      loadToken += 1;
+      if (activeWorker) {
+        activeWorker.terminate();
+        activeWorker = null;
+      }
+      if (activeRun) activeRun.stop();
+      markStopped();
+      statsEl.textContent = (ALGO_LABEL[algoSelect.value] || "") + " 已停止";
+      setBusy(false);
+    }
+
+    async function runSelected() {
       const token = ++loadToken;
-      cachedUV = null;
-      modelSelect.disabled = true;
-      runButton.disabled = true;
-      statsEl.textContent = "正在加载 " + file + " …";
+      if (activeWorker) {
+        activeWorker.terminate();
+        activeWorker = null;
+      }
+      if (activeRun) activeRun.stop();
+      const file = modelSelect.value;
+      const algo = algoSelect.value;
+      densityLabel.hidden = algo === "naive";
+      setBusy(true);
       try {
-        const response = await fetch(MODELS_DIR + "/" + file);
-        if (!response.ok) throw new Error("HTTP " + response.status);
-        const text = await response.text();
-        if (token !== loadToken) return;
-        const parsed = parseOBJ(text);
-        if (!parsed.verts.length || !parsed.faces.length) throw new Error("OBJ 里没有网格");
-        const verts = centerAndScale(parsed.verts);
-        sourceMesh = { verts: verts, faces: parsed.faces, token: token };
-        showInput(verts, parsed.faces);
-        clearCurvature();
-        if (token !== loadToken) return;
-        statsEl.textContent = "主曲率计算中…";
-        await paint();
-        const field = await afterWasm(function () {
-          if (token !== loadToken) return null;
-          return computePrincipalDirs(verts, parsed.faces);
-        });
-        if (token !== loadToken) return;
-        if (field) {
-          curvatureGroup = buildCurvatureLines(verts, parsed.faces, field.dirs);
-          scene.add(curvatureGroup);
-          applyCurvatureVisibility();
-          const ms = Math.round(field.timeMs);
-          statsEl.textContent = "主曲率场 · Weingarten · 三角面 " + parsed.faces.length + " · " + ms + " ms · 橙=主方向，蓝=正交";
+        if (!meshCache || meshCache.file !== file) {
+          statsEl.textContent = "正在加载 " + file + " …";
+          const response = await fetch(MODELS_DIR + "/" + file);
+          if (!response.ok) throw new Error("HTTP " + response.status);
+          const text = await response.text();
+          if (token !== loadToken) return;
+          const parsed = parseOBJ(text);
+          if (!parsed.verts.length || !parsed.faces.length) throw new Error("OBJ 里没有网格");
+          meshCache = { file: file, verts: centerAndScale(parsed.verts), faces: parsed.faces };
+          fieldCache = null;
         }
-        modelSelect.disabled = false;
-        runButton.disabled = false;
+        const mesh = meshCache;
+        if (algo === "naive") {
+          statsEl.textContent = "朴素合并…";
+          const merged = await runInWorker("naive", mesh.verts, mesh.faces);
+          if (token !== loadToken || merged.stopped) return;
+          const quads = groupIndices(merged.quads, 4);
+          const leftovers = groupIndices(merged.leftovers, 3);
+          showMerged(mesh.verts, quads, leftovers);
+          statsEl.textContent = "朴素合并 · 顶点 " + mesh.verts.length +
+            " · 四边形 " + quads.length +
+            " · 剩余三角 " + leftovers.length;
+          return;
+        }
+        const divisions = Number(gridDiv.value) || 10;
+        if (!fieldCache || fieldCache.file !== file || fieldCache.algo !== algo) {
+          statsEl.textContent = ALGO_LABEL[algo] + " 求解中…";
+          const solved = await runInWorker(algo, mesh.verts, mesh.faces);
+          if (token !== loadToken || solved.stopped) return;
+          fieldCache = {
+            file: file,
+            algo: algo,
+            uv: uvPairs(solved.uv, mesh.verts.length),
+            corners: cornerPairs(solved.corners, mesh.faces.length),
+            stages: collectStages()
+          };
+        } else {
+          showStages(fieldCache.stages);
+        }
+        const grid = traceGrid(mesh.verts, mesh.faces, fieldCache.uv, fieldCache.corners, divisions);
+        if (token !== loadToken) return;
+        showField(mesh.verts, mesh.faces, grid);
+        statsEl.textContent = ALGO_LABEL[algo] + " · 顶点 " + mesh.verts.length +
+          " · 四边单元 " + grid.cells;
       } catch (error) {
         if (token !== loadToken) return;
-        statsEl.textContent = "加载失败：" + (error && error.message ? error.message : error);
-        modelSelect.disabled = false;
-        runButton.disabled = false;
+        statsEl.textContent = (ALGO_LABEL[algo] || "加载") + "失败：" + (error && error.message ? error.message : error);
+      } finally {
+        if (token === loadToken) setBusy(false);
       }
+    }
+
+    function showMerged(verts, quads, leftovers) {
+      const root = new THREE.Group();
+      const quadEdges = new Set();
+      for (let i = 0; i < quads.length; i++) {
+        const f = quads[i];
+        for (let k = 0; k < f.length; k++) quadEdges.add(edgeKey(f[k], f[(k + 1) % f.length]));
+      }
+      if (quads.length) {
+        root.add(buildSurface(verts, quads, quadMaterial));
+        root.add(makeLines(boundaryPositions(verts, quads), quadLineMaterial));
+      }
+      if (leftovers.length) {
+        root.add(buildSurface(verts, leftovers, triMaterial));
+        root.add(makeLines(boundaryPositions(verts, leftovers, quadEdges), triLineMaterial));
+      }
+      if (currentRoot) {
+        scene.remove(currentRoot);
+        disposeRoot(currentRoot);
+      }
+      currentRoot = root;
+      scene.add(currentRoot);
+      applyVisibility();
     }
 
     for (let i = 0; i < modelFiles.length; i++) {
@@ -784,14 +1005,12 @@
     }
     const initial = modelFiles.indexOf("torus_F7680.obj");
     modelSelect.selectedIndex = initial >= 0 ? initial : 0;
-    modelSelect.addEventListener("change", function () {
-      loadModel(modelSelect.value);
-    });
-    runButton.addEventListener("click", runMIQ);
+    modelSelect.addEventListener("change", runSelected);
+    algoSelect.addEventListener("change", runSelected);
+    stopButton.addEventListener("click", requestStop);
     gridDiv.addEventListener("change", function () {
-      if (cachedUV) runMIQ();
+      if (algoSelect.value !== "naive") runSelected();
     });
-    showCurvature.addEventListener("change", applyCurvatureVisibility);
     showSurface.addEventListener("change", applyVisibility);
     showWire.addEventListener("change", applyVisibility);
     window.addEventListener("resize", resize);
@@ -803,7 +1022,7 @@
     }
 
     resize();
-    loadModel(modelSelect.value);
+    runSelected();
     frame();
   </script>
 </body>
