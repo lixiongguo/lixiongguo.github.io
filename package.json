@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "electron": "JEKYLL_ENV=production bundle exec jekyll build && npm start --prefix electron"
+  },
   "dependencies": {
     "sharp": "^0.34.5",
     "three": "^0.184.0"

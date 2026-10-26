@@ -26,6 +26,7 @@ keep_files:
 exclude:
   - cpp/
   - docs/cpp/
+  - electron/
   - "gallery/*.md"
 plugins:
   - jekyll-feed

@@ -1,0 +1,12 @@
+{
+  "name": "algo-experiment-shell",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^35.7.5"
+  }
+}
