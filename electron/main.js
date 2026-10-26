@@ -3,6 +3,7 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { createStaticServer, listen } = require("./static-server");
+const { createProfiler } = require("./profile");
 
 const repoRoot = path.resolve(__dirname, "..");
 const docsRoot = path.join(repoRoot, "docs");
@@ -51,6 +52,8 @@ function parseReadyDemos(yamlText) {
 let server = null;
 let readyDemos = [];
 let appPort = 0;
+let profiler = null;
+let latestProfile = null;
 const nativeChildren = new Map();
 
 const nativeTools = [
@@ -83,6 +86,16 @@ function nativeState(id) {
   const child = nativeChildren.get(id);
   if (child && child.exitCode === null && !child.killed) return "running";
   return "idle";
+}
+
+function runningTools() {
+  const tools = [];
+  for (const [id, child] of nativeChildren) {
+    if (!child || child.exitCode !== null || child.killed) continue;
+    const tool = nativeTools.find((item) => item.id === id);
+    tools.push({ id, title: tool ? tool.title : id, pid: child.pid });
+  }
+  return tools;
 }
 
 function broadcast(channel, payload) {
@@ -132,6 +145,7 @@ function startNative(tool) {
   });
 }
 
+ipcMain.handle("get-profile", () => latestProfile);
 ipcMain.handle("get-demos", () => readyDemos);
 ipcMain.handle("get-native-tools", () => nativeCatalog());
 ipcMain.handle("launch-native", async (_event, id) => {
@@ -205,6 +219,14 @@ app.whenReady().then(async () => {
     throw new Error("静态服务必须只监听 127.0.0.1");
   }
   console.log("ALGO_APP_URL http://127.0.0.1:" + appPort + "/");
+  profiler = createProfiler({
+    getAppMetrics: () => app.getAppMetrics(),
+    getTools: runningTools
+  });
+  profiler.start((sample) => {
+    latestProfile = sample;
+    broadcast("profile-sample", sample);
+  });
   createWindow();
 
   app.on("activate", () => {
@@ -220,6 +242,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", () => {
+  if (profiler) profiler.stop();
   for (const child of nativeChildren.values()) {
     if (child.exitCode === null) child.kill();
   }

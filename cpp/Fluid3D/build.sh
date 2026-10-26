@@ -44,7 +44,7 @@ build_viewer() {
   mkdir -p "$outdir"
   echo "[build] viewer -> ${outdir}/viewer"
   "$CXX" "${release_flags[@]}" -fobjc-arc -framework Cocoa -I. \
-    -o "${outdir}/viewer" viewer.mm fluidsim.cpp levelset_util.cpp
+    -o "${outdir}/viewer" viewer.mm ../resource_hud.mm fluidsim.cpp levelset_util.cpp
   echo "[build] done: ${outdir}/viewer"
 }
 

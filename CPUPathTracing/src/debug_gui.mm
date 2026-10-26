@@ -14,6 +14,7 @@
 #include "thread/thread_pool.hpp"
 
 #import <Cocoa/Cocoa.h>
+#import "../../cpp/resource_hud.h"
 
 #include <atomic>
 #include <chrono>
@@ -375,6 +376,7 @@ NSImage *imageFromRGBA(const std::vector<uint8_t> &rgba, int w, int h) {
     [root addArrangedSubview:images];
     [root addArrangedSubview:status];
     [self addSubview:root];
+    [ResourceHud attachToView:self];
 
     [NSLayoutConstraint activateConstraints:@[
         [root.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],

@@ -3,6 +3,7 @@
 #include "vec.h"
 
 #import <Cocoa/Cocoa.h>
+#import "../resource_hud.h"
 
 #include <atomic>
 #include <chrono>
@@ -146,6 +147,7 @@ void simLoop(const std::shared_ptr<SimState>& state, void (^onFrame)(void)) {
     status.stringValue = @"正在初始化 32³ 网格…";
     status.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:status];
+    [ResourceHud attachToView:self];
     [NSLayoutConstraint activateConstraints:@[
         [status.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:16],
         [status.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-12],
