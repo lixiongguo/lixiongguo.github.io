@@ -15,6 +15,7 @@
 #include <fstream>
 #include <cmath>
 #include <iostream>
+#include <string>
 
 static void renderAndSave(PathTracingRenderer &renderer, int W, int H, int spp, const std::string &filename) {
     std::vector<glm::vec3> img(static_cast<size_t>(W) * H, glm::vec3(0));
@@ -52,8 +53,20 @@ static void renderAndSave(PathTracingRenderer &renderer, int W, int H, int spp, 
     std::cout << "saved " << filename << std::endl;
 }
 
-int main() {
-    const int W = 480, H = 360, spp = 64;
+int main(int argc, char **argv) {
+    int W = 480, H = 360, spp = 64;
+    if (argc == 4) {
+        W = std::stoi(argv[1]);
+        H = std::stoi(argv[2]);
+        spp = std::stoi(argv[3]);
+    } else if (argc != 1) {
+        std::cerr << "usage: mis_compare [width height spp]\n";
+        return 2;
+    }
+    if (W <= 0 || H <= 0 || spp <= 0) {
+        std::cerr << "width, height and spp must be positive\n";
+        return 2;
+    }
 
     Film film(W, H);
     Camera camera(film, { 0, 2.5f, -6 }, { 0, 1.5f, 0 }, 45);

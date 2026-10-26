@@ -127,6 +127,23 @@ async function runField(msg) {
     const recorded = inst.ccall("field_recorded_count", "number", [], []);
     const ms = recorded > 0 ? inst.ccall("field_recorded_ms", "number", ["number"], [recorded - 1]) : 0;
     postStage(i, "done", ms);
+    if (msg.algo === "miq" && i === 2) {
+      const nFaces = inst.ccall("field_capture_cross", "number", [], []);
+      if (nFaces > 0) {
+        const dirs = readDoubles(inst, inst.ccall("get_cross_preview", "number", [], []), nFaces * 6);
+        const nEdges = inst.ccall("get_cross_edge_count", "number", [], []);
+        const edges = readInts(inst, inst.ccall("get_cross_edges", "number", [], []), nEdges * 3);
+        const nSing = inst.ccall("get_singular_count", "number", [], []);
+        const singulars = readInts(inst, inst.ccall("get_singular_verts", "number", [], []), nSing);
+        self.postMessage({
+          type: "preview",
+          kind: "cross",
+          dirs: dirs,
+          edges: edges,
+          singulars: singulars
+        }, [dirs.buffer, edges.buffer, singulars.buffer]);
+      }
+    }
   }
 
   const finished = inst.ccall("field_finish", "number", [], []);

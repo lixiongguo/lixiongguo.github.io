@@ -48,6 +48,8 @@
       color: #cfcfcf;
     }
     .toolbar label[hidden] { display: none; }
+    .checks { display: inline-flex; align-items: center; gap: 10px; }
+    .checks[hidden] { display: none; }
     select {
       background: #1d1d1d;
       color: #f0f0f0;
@@ -115,6 +117,17 @@
         </select>
       </label>
       <label id="density-label" hidden>密度 <input id="grid-div" type="range" min="4" max="28" value="10"></label>
+      <label id="view-label" hidden>查看
+        <select id="view-select">
+          <option value="cross">交叉场</option>
+          <option value="param" disabled>参数化网格</option>
+        </select>
+      </label>
+      <span id="cross-options" class="checks" hidden>
+        <label><input type="checkbox" id="show-dirs" checked> 方向</label>
+        <label><input type="checkbox" id="show-jumps" checked> 跳跃</label>
+        <label><input type="checkbox" id="show-sings" checked> 奇异点</label>
+      </span>
       <label><input type="checkbox" id="show-surface" checked> 表面</label>
       <label><input type="checkbox" id="show-wire" checked> 线框</label>
       <button type="button" class="stop" id="stop-run" hidden>停止</button>
@@ -150,6 +163,12 @@
     const modelSelect = document.getElementById("model-select");
     const algoSelect = document.getElementById("algo-select");
     const densityLabel = document.getElementById("density-label");
+    const viewLabel = document.getElementById("view-label");
+    const viewSelect = document.getElementById("view-select");
+    const crossOptions = document.getElementById("cross-options");
+    const showDirs = document.getElementById("show-dirs");
+    const showJumps = document.getElementById("show-jumps");
+    const showSings = document.getElementById("show-sings");
     const gridDiv = document.getElementById("grid-div");
     const timingPanel = document.getElementById("timing-panel");
     const timingSummary = document.getElementById("timing-summary");
@@ -204,6 +223,14 @@
     });
     const quadLineMaterial = new THREE.LineBasicMaterial({ color: 0x1c1c1c });
     const triLineMaterial = new THREE.LineBasicMaterial({ color: 0x6b3a16 });
+    const crossDirMaterial = new THREE.LineBasicMaterial({ color: 0xe87d0d });
+    const crossOrthoMaterial = new THREE.LineBasicMaterial({ color: 0x4aa3d8 });
+    const jumpMaterial = new THREE.LineBasicMaterial({ vertexColors: true });
+    const singMaterial = new THREE.PointsMaterial({
+      color: 0xff5a5a,
+      size: 9,
+      sizeAttenuation: false
+    });
 
     let currentRoot = null;
 
@@ -774,7 +801,8 @@
       const wire = showWire.checked;
       currentRoot.traverse(function (child) {
         if (child.isMesh) child.visible = surface;
-        if (child.isLineSegments) child.visible = wire;
+        if (child.isLineSegments) child.visible = child.userData.field ? true : wire;
+        if (child.isPoints) child.visible = true;
       });
     }
 
@@ -785,6 +813,145 @@
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
+    }
+
+    let analysisView = null;
+
+    function hideAnalysisChrome() {
+      analysisView = null;
+      viewLabel.hidden = true;
+      crossOptions.hidden = true;
+      viewSelect.value = "cross";
+      const paramOption = viewSelect.querySelector('option[value="param"]');
+      if (paramOption) paramOption.disabled = true;
+    }
+
+    function syncAnalysisChrome() {
+      const active = !!(analysisView && analysisView.dirs);
+      viewLabel.hidden = !active;
+      const showingCross = active && viewSelect.value === "cross";
+      crossOptions.hidden = !showingCross;
+      densityLabel.hidden = algoSelect.value === "naive" || (active && viewSelect.value !== "param");
+      const paramOption = viewSelect.querySelector('option[value="param"]');
+      if (paramOption) paramOption.disabled = !(analysisView && analysisView.grid);
+    }
+
+    function jumpColor(jump) {
+      const mag = Math.abs(jump);
+      if (mag >= 2) return [0.91, 0.30, 0.24];
+      return jump > 0 ? [0.94, 0.77, 0.29] : [0.35, 0.78, 0.55];
+    }
+
+    function drawCrossAnalysis(view) {
+      const verts = view.verts;
+      const faces = view.faces;
+      const dirs = view.dirs;
+      const root = new THREE.Group();
+      root.add(buildSmoothSurface(verts, faces, quadMaterial));
+      root.add(makeLines(boundaryPositions(verts, faces), quadLineMaterial));
+      let nonzero = 0;
+      if (showDirs.checked && dirs) {
+        const primary = [];
+        const ortho = [];
+        let edgeSum = 0;
+        const sample = Math.min(faces.length, 400);
+        for (let i = 0; i < sample; i++) {
+          const f = faces[i];
+          const a = verts[f[0]];
+          const b = verts[f[1]];
+          edgeSum += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+        }
+        const length = (sample ? edgeSum / sample : 0.02) * 1.15;
+        for (let fi = 0; fi < faces.length; fi++) {
+          const f = faces[fi];
+          const a = verts[f[0]];
+          const b = verts[f[1]];
+          const c = verts[f[2]];
+          const n = newellNormal(verts, f);
+          const cx = (a[0] + b[0] + c[0]) / 3 + n[0] * length * 0.08;
+          const cy = (a[1] + b[1] + c[1]) / 3 + n[1] * length * 0.08;
+          const cz = (a[2] + b[2] + c[2]) / 3 + n[2] * length * 0.08;
+          const base = fi * 6;
+          const u = [dirs[base], dirs[base + 1], dirs[base + 2]];
+          const v = [dirs[base + 3], dirs[base + 4], dirs[base + 5]];
+          const ul = Math.hypot(u[0], u[1], u[2]) || 1;
+          const vl = Math.hypot(v[0], v[1], v[2]) || 1;
+          primary.push(
+            cx - u[0] / ul * length * 0.5, cy - u[1] / ul * length * 0.5, cz - u[2] / ul * length * 0.5,
+            cx + u[0] / ul * length * 0.5, cy + u[1] / ul * length * 0.5, cz + u[2] / ul * length * 0.5
+          );
+          ortho.push(
+            cx - v[0] / vl * length * 0.5, cy - v[1] / vl * length * 0.5, cz - v[2] / vl * length * 0.5,
+            cx + v[0] / vl * length * 0.5, cy + v[1] / vl * length * 0.5, cz + v[2] / vl * length * 0.5
+          );
+        }
+        const primaryLines = makeLines(primary, crossDirMaterial);
+        const orthoLines = makeLines(ortho, crossOrthoMaterial);
+        primaryLines.userData.field = true;
+        orthoLines.userData.field = true;
+        root.add(primaryLines);
+        root.add(orthoLines);
+      }
+      if (showJumps.checked && view.edges) {
+        const positions = [];
+        const colors = [];
+        for (let i = 0; i + 2 < view.edges.length; i += 3) {
+          const jump = view.edges[i + 2];
+          if (!jump) continue;
+          nonzero++;
+          const p = verts[view.edges[i]];
+          const q = verts[view.edges[i + 1]];
+          const color = jumpColor(jump);
+          positions.push(p[0], p[1], p[2], q[0], q[1], q[2]);
+          colors.push(color[0], color[1], color[2], color[0], color[1], color[2]);
+        }
+        if (positions.length) {
+          const geom = new THREE.BufferGeometry();
+          geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+          geom.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+          const lines = new THREE.LineSegments(geom, jumpMaterial);
+          lines.userData.field = true;
+          root.add(lines);
+        }
+      } else if (view.edges) {
+        for (let i = 2; i < view.edges.length; i += 3) if (view.edges[i]) nonzero++;
+      }
+      const sings = view.singulars ? view.singulars.length : 0;
+      if (showSings.checked && sings) {
+        const positions = [];
+        for (let i = 0; i < view.singulars.length; i++) {
+          const p = verts[view.singulars[i]];
+          if (p) positions.push(p[0], p[1], p[2]);
+        }
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        const points = new THREE.Points(geom, singMaterial);
+        points.userData.field = true;
+        root.add(points);
+      }
+      if (currentRoot) {
+        scene.remove(currentRoot);
+        disposeRoot(currentRoot);
+      }
+      currentRoot = root;
+      scene.add(currentRoot);
+      applyVisibility();
+      const ready = view.grid ? " · 参数化已完成" : " · 参数化仍在继续";
+      statsEl.textContent = "交叉场 · 奇异点 " + sings + " · 非零跳跃 " + nonzero + ready;
+    }
+
+    function renderAnalysis() {
+      if (!analysisView) return;
+      syncAnalysisChrome();
+      if (viewSelect.value === "param" && analysisView.grid) {
+        showField(analysisView.verts, analysisView.faces, analysisView.grid);
+        statsEl.textContent = "MIQ · 顶点 " + analysisView.verts.length +
+          " · 四边单元 " + analysisView.grid.cells;
+        return;
+      }
+      viewSelect.value = "cross";
+      syncAnalysisChrome();
+      drawCrossAnalysis(analysisView);
     }
 
     function showField(verts, faces, grid) {
@@ -879,6 +1046,18 @@
           if (!msg) return;
           if (msg.type === "plan") showPlan(msg.names);
           else if (msg.type === "progress") markProgress(msg.done, msg.total);
+          else if (msg.type === "preview" && msg.kind === "cross") {
+            analysisView = {
+              verts: verts,
+              faces: faces,
+              dirs: msg.dirs,
+              edges: msg.edges,
+              singulars: msg.singulars,
+              grid: null
+            };
+            viewSelect.value = "cross";
+            renderAnalysis();
+          }
           else if (msg.type === "stage") markStage(msg.index, msg.state, msg.ms);
           else if (msg.type === "result") finish(resolve, msg);
           else if (msg.type === "error") finish(reject, new Error(msg.message || "求解失败"));
@@ -934,6 +1113,7 @@
         }
         const mesh = meshCache;
         if (algo === "naive") {
+          hideAnalysisChrome();
           statsEl.textContent = "朴素合并…";
           const merged = await runInWorker("naive", mesh.verts, mesh.faces);
           if (token !== loadToken || merged.stopped) return;
@@ -947,6 +1127,7 @@
         }
         const divisions = Number(gridDiv.value) || 10;
         if (!fieldCache || fieldCache.file !== file || fieldCache.algo !== algo) {
+          hideAnalysisChrome();
           statsEl.textContent = ALGO_LABEL[algo] + " 求解中…";
           const solved = await runInWorker(algo, mesh.verts, mesh.faces);
           if (token !== loadToken || solved.stopped) return;
@@ -955,13 +1136,35 @@
             algo: algo,
             uv: uvPairs(solved.uv, mesh.verts.length),
             corners: cornerPairs(solved.corners, mesh.faces.length),
-            stages: collectStages()
+            stages: collectStages(),
+            analysis: analysisView ? {
+              dirs: analysisView.dirs,
+              edges: analysisView.edges,
+              singulars: analysisView.singulars
+            } : null
           };
         } else {
           showStages(fieldCache.stages);
+          if (fieldCache.analysis) {
+            analysisView = {
+              verts: mesh.verts,
+              faces: mesh.faces,
+              dirs: fieldCache.analysis.dirs,
+              edges: fieldCache.analysis.edges,
+              singulars: fieldCache.analysis.singulars,
+              grid: null
+            };
+          }
         }
         const grid = traceGrid(mesh.verts, mesh.faces, fieldCache.uv, fieldCache.corners, divisions);
         if (token !== loadToken) return;
+        if (analysisView) {
+          analysisView.verts = mesh.verts;
+          analysisView.faces = mesh.faces;
+          analysisView.grid = grid;
+          renderAnalysis();
+          return;
+        }
         showField(mesh.verts, mesh.faces, grid);
         statsEl.textContent = ALGO_LABEL[algo] + " · 顶点 " + mesh.verts.length +
           " · 四边单元 " + grid.cells;
@@ -1008,6 +1211,10 @@
     modelSelect.addEventListener("change", runSelected);
     algoSelect.addEventListener("change", runSelected);
     stopButton.addEventListener("click", requestStop);
+    viewSelect.addEventListener("change", renderAnalysis);
+    showDirs.addEventListener("change", renderAnalysis);
+    showJumps.addEventListener("change", renderAnalysis);
+    showSings.addEventListener("change", renderAnalysis);
     gridDiv.addEventListener("change", function () {
       if (algoSelect.value !== "naive") runSelected();
     });

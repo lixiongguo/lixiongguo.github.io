@@ -1,0 +1,28 @@
+name: CPU Path Tracing
+
+on:
+  push:
+    paths:
+      - "CPUPathTracing/**"
+      - "cpp/deps/glm/**"
+      - ".github/workflows/cpu-path-tracing.yml"
+  pull_request:
+    paths:
+      - "CPUPathTracing/**"
+      - "cpp/deps/glm/**"
+      - ".github/workflows/cpu-path-tracing.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: cpu-path-tracing-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-smoke:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and smoke test
+        run: bash CPUPathTracing/build.sh test

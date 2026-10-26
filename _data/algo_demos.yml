@@ -77,7 +77,7 @@
 - id: cpu-path-tracing
   title: CPU路径追踪
   url: /cpu-path-tracing.html
-  ready: false
+  ready: true
 
 
 - id: uv-unwrap-origami
