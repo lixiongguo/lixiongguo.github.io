@@ -60,6 +60,13 @@ const nativeTools = [
     detail: "本机窗口，并排看 MIS 开和关",
     cwd: path.join(repoRoot, "CPUPathTracing"),
     bin: path.join(repoRoot, "CPUPathTracing", "build", "release", "debug_gui")
+  },
+  {
+    id: "fluid3d",
+    title: "流体模拟",
+    detail: "本机窗口，自由液面粒子",
+    cwd: path.join(repoRoot, "cpp", "Fluid3D"),
+    bin: path.join(repoRoot, "cpp", "Fluid3D", "build", "release", "viewer")
   }
 ];
 
