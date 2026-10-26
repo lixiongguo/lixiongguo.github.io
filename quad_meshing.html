@@ -91,6 +91,7 @@
       </label>
       <button id="run-miq" type="button">MIQ</button>
       <label>密度 <input id="grid-div" type="range" min="4" max="28" value="10"></label>
+      <label><input type="checkbox" id="show-curvature" checked> 主曲率</label>
       <label><input type="checkbox" id="show-surface" checked> 表面</label>
       <label><input type="checkbox" id="show-wire" checked> 线框</label>
       <div class="stats" id="stats">正在加载…</div>
@@ -121,6 +122,7 @@
     const modelSelect = document.getElementById("model-select");
     const runButton = document.getElementById("run-miq");
     const gridDiv = document.getElementById("grid-div");
+    const showCurvature = document.getElementById("show-curvature");
     const showSurface = document.getElementById("show-surface");
     const showWire = document.getElementById("show-wire");
     const statsEl = document.getElementById("stats");
@@ -170,8 +172,11 @@
     });
     const quadLineMaterial = new THREE.LineBasicMaterial({ color: 0x1c1c1c });
     const triLineMaterial = new THREE.LineBasicMaterial({ color: 0x6b3a16 });
+    const curvatureK1Material = new THREE.LineBasicMaterial({ color: 0xe87d0d });
+    const curvatureK2Material = new THREE.LineBasicMaterial({ color: 0x6aa8ff });
 
     let currentRoot = null;
+    let curvatureGroup = null;
 
     function edgeKey(a, b) {
       return a < b ? a + "_" + b : b + "_" + a;
@@ -283,6 +288,13 @@
     }
 
     let fieldInst = null;
+    let wasmChain = Promise.resolve();
+    function afterWasm(task) {
+      const next = wasmChain.then(task, task);
+      wasmChain = next.then(function () {}, function () {});
+      return next;
+    }
+
     async function fieldSolver() {
       if (fieldInst) return fieldInst;
       await loadClassicScript("assets/js/wasm-loader.js");
@@ -455,6 +467,106 @@
       }
     }
 
+    function uploadMesh(inst, verts, faces) {
+      const flatPos = new Float64Array(verts.length * 3);
+      for (let i = 0; i < verts.length; i++) {
+        flatPos[i * 3] = verts[i][0];
+        flatPos[i * 3 + 1] = verts[i][1];
+        flatPos[i * 3 + 2] = verts[i][2];
+      }
+      const flatFaces = new Int32Array(faces.length * 3);
+      for (let i = 0; i < faces.length; i++) {
+        flatFaces[i * 3] = faces[i][0];
+        flatFaces[i * 3 + 1] = faces[i][1];
+        flatFaces[i * 3 + 2] = faces[i][2];
+      }
+      const posPtr = wasmWriteDoubles(inst, flatPos);
+      const facePtr = wasmWriteInts(inst, flatFaces);
+      const rc = inst.ccall("load_mesh", "number", ["number", "number", "number", "number"], [posPtr, flatPos.length, facePtr, flatFaces.length]);
+      inst._free(posPtr);
+      inst._free(facePtr);
+      if (rc !== 0) throw new Error("load_mesh " + rc);
+    }
+
+    // QuadCover 的交叉场来自 Weingarten 主曲率方向（PrincipalCurvatureField::estimateFromWeingarten）。
+    async function computePrincipalDirs(verts, faces) {
+      const inst = await fieldSolver();
+      const t0 = performance.now();
+      uploadMesh(inst, verts, faces);
+      const rc = inst.ccall("step1_compute_principal_field", "number", [], []);
+      if (rc !== 0) throw new Error("主曲率失败 (" + rc + ")");
+      const count = inst.ccall("get_face_dirs_size", "number", [], []);
+      const ptr = inst.ccall("get_face_dirs", "number", [], []);
+      if (!ptr || count < faces.length * 3) throw new Error("主曲率方向数量不足");
+      let dirs;
+      if (inst.HEAPF64 && (ptr % 8) === 0) dirs = inst.HEAPF64.slice(ptr >> 3, (ptr >> 3) + count);
+      else {
+        dirs = new Float64Array(count);
+        for (let i = 0; i < count; i++) dirs[i] = inst.getValue(ptr + i * 8, "double");
+      }
+      inst.ccall("dispose", "void", [], []);
+      return { dirs: dirs, timeMs: performance.now() - t0 };
+    }
+
+    function clearCurvature() {
+      if (!curvatureGroup) return;
+      scene.remove(curvatureGroup);
+      disposeRoot(curvatureGroup);
+      curvatureGroup = null;
+    }
+
+    function buildCurvatureLines(verts, faces, dirs) {
+      const step = faces.length > 8000 ? Math.ceil(faces.length / 6000) : 1;
+      const k1 = [];
+      const k2 = [];
+      for (let fi = 0; fi < faces.length; fi += step) {
+        const f = faces[fi];
+        const p0 = verts[f[0]];
+        const p1 = verts[f[1]];
+        const p2 = verts[f[2]];
+        const c = [(p0[0] + p1[0] + p2[0]) / 3, (p0[1] + p1[1] + p2[1]) / 3, (p0[2] + p1[2] + p2[2]) / 3];
+        const e1x = p1[0] - p0[0], e1y = p1[1] - p0[1], e1z = p1[2] - p0[2];
+        const e2x = p2[0] - p0[0], e2y = p2[1] - p0[1], e2z = p2[2] - p0[2];
+        let nx = e1y * e2z - e1z * e2y;
+        let ny = e1z * e2x - e1x * e2z;
+        let nz = e1x * e2y - e1y * e2x;
+        const area2 = Math.hypot(nx, ny, nz);
+        if (area2 < 1e-12) continue;
+        nx /= area2; ny /= area2; nz /= area2;
+        let dx = dirs[fi * 3], dy = dirs[fi * 3 + 1], dz = dirs[fi * 3 + 2];
+        const nd = dx * nx + dy * ny + dz * nz;
+        dx -= nd * nx; dy -= nd * ny; dz -= nd * nz;
+        const dlen = Math.hypot(dx, dy, dz);
+        if (dlen < 1e-8) continue;
+        dx /= dlen; dy /= dlen; dz /= dlen;
+        const ox = ny * dz - nz * dy;
+        const oy = nz * dx - nx * dz;
+        const oz = nx * dy - ny * dx;
+        const half = Math.sqrt(area2) * 0.22;
+        const lift = 0.003;
+        const ox0 = c[0] + nx * lift, oy0 = c[1] + ny * lift, oz0 = c[2] + nz * lift;
+        k1.push(ox0 - dx * half, oy0 - dy * half, oz0 - dz * half, ox0 + dx * half, oy0 + dy * half, oz0 + dz * half);
+        k2.push(ox0 - ox * half, oy0 - oy * half, oz0 - oz * half, ox0 + ox * half, oy0 + oy * half, oz0 + oz * half);
+      }
+      const group = new THREE.Group();
+      group.name = "curvature";
+      if (k1.length) {
+        const lines = makeLines(k1, curvatureK1Material);
+        lines.userData.wire = false;
+        group.add(lines);
+      }
+      if (k2.length) {
+        const lines = makeLines(k2, curvatureK2Material);
+        lines.userData.wire = false;
+        group.add(lines);
+      }
+      return group;
+    }
+
+    function applyCurvatureVisibility() {
+      if (curvatureGroup) curvatureGroup.visible = showCurvature.checked;
+    }
+
     function pushTriangle(positions, normals, verts, i0, i1, i2, normal) {
       const ids = [i0, i1, i2];
       for (let k = 0; k < 3; k++) {
@@ -598,7 +710,7 @@
         if (!cachedUV || cachedUV.token !== token) {
           statsEl.textContent = "MIQ 求解中…";
           await paint();
-          const solved = await solveMIQUV(mesh.verts, mesh.faces);
+          const solved = await afterWasm(function () { return solveMIQUV(mesh.verts, mesh.faces); });
           if (token !== loadToken) return;
           cachedUV = { token: token, corners: solved.corners, timeMs: solved.timeMs };
         }
@@ -638,7 +750,22 @@
         const verts = centerAndScale(parsed.verts);
         sourceMesh = { verts: verts, faces: parsed.faces, token: token };
         showInput(verts, parsed.faces);
+        clearCurvature();
         if (token !== loadToken) return;
+        statsEl.textContent = "主曲率计算中…";
+        await paint();
+        const field = await afterWasm(function () {
+          if (token !== loadToken) return null;
+          return computePrincipalDirs(verts, parsed.faces);
+        });
+        if (token !== loadToken) return;
+        if (field) {
+          curvatureGroup = buildCurvatureLines(verts, parsed.faces, field.dirs);
+          scene.add(curvatureGroup);
+          applyCurvatureVisibility();
+          const ms = Math.round(field.timeMs);
+          statsEl.textContent = "主曲率场 · Weingarten · 三角面 " + parsed.faces.length + " · " + ms + " ms · 橙=主方向，蓝=正交";
+        }
         modelSelect.disabled = false;
         runButton.disabled = false;
       } catch (error) {
@@ -664,6 +791,7 @@
     gridDiv.addEventListener("change", function () {
       if (cachedUV) runMIQ();
     });
+    showCurvature.addEventListener("change", applyCurvatureVisibility);
     showSurface.addEventListener("change", applyVisibility);
     showWire.addEventListener("change", applyVisibility);
     window.addEventListener("resize", resize);
