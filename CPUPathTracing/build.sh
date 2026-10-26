@@ -6,7 +6,8 @@
 #   ./build.sh debug      debug binary   -> build/debug/mis_compare
 #   ./build.sh test       release build + short render, checks the two PPMs differ
 #   ./build.sh run        release build + default 480x360x64 into build/out
-#   ./build.sh gui        debug window: MIS on/off side by side
+#   ./build.sh gui-build  compile the debug window only
+#   ./build.sh gui        compile and open the debug window
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -122,13 +123,16 @@ case "$MODE" in
     echo "[run] 480x360 spp=64 -> build/out"
     (cd build/out && ../release/mis_compare)
     ;;
+  gui-build)
+    build_gui release
+    ;;
   gui)
     build_gui release
     echo "[gui] opening debug window"
     ./build/release/debug_gui
     ;;
   *)
-    echo "usage: ./build.sh [release|debug|test|run|gui]" >&2
+    echo "usage: ./build.sh [release|debug|test|run|gui-build|gui]" >&2
     exit 2
     ;;
 esac

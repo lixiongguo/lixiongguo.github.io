@@ -22,6 +22,12 @@
       font-size: 28px;
       font-weight: 650;
     }
+    h2 {
+      margin: 36px 0 8px;
+      font-size: 15px;
+      font-weight: 650;
+      color: #c8c8c8;
+    }
     p {
       margin: 0 0 28px;
       color: #a8a8a8;
@@ -35,8 +41,9 @@
       flex-direction: column;
       gap: 10px;
     }
-    a {
+    a, button.tool {
       display: block;
+      width: 100%;
       padding: 14px 16px;
       border-radius: 8px;
       background: #242424;
@@ -44,8 +51,20 @@
       text-decoration: none;
       border: 1px solid #333;
       font-size: 16px;
+      text-align: left;
+      cursor: pointer;
+      font-family: inherit;
     }
-    a:hover { border-color: #e87d0d; color: #ffd7ad; }
+    a:hover, button.tool:hover { border-color: #e87d0d; color: #ffd7ad; }
+    button.tool small {
+      display: block;
+      margin-top: 4px;
+      color: #9a9a9a;
+      font-size: 12px;
+      font-weight: 400;
+    }
+    button.tool[data-state="running"] { border-color: #e87d0d; }
+    button.tool[data-state="building"] { opacity: 0.7; }
     #status { min-height: 1.2em; }
   </style>
 </head>
@@ -54,6 +73,8 @@
     <h1>算法实验</h1>
     <p id="status">正在读取列表…</p>
     <ul id="demo-list"></ul>
+    <h2>本机调试</h2>
+    <ul id="native-list"></ul>
   </main>
   <script>
     const list = document.getElementById("demo-list");
@@ -63,6 +84,53 @@
       if (!url || url.charAt(0) !== "/" || url.startsWith("//")) return;
       location.assign(url);
     }
+
+    function mountNativeTools() {
+      const nativeList = document.getElementById("native-list");
+      if (!window.algoApp || typeof window.algoApp.getNativeTools !== "function") {
+        nativeList.parentElement.querySelector("h2").hidden = true;
+        return;
+      }
+      window.algoApp.onNativeStatus(function (status) {
+        const button = nativeList.querySelector('[data-native="' + status.id + '"]');
+        if (!button) return;
+        button.dataset.state = status.state || "idle";
+        button.disabled = status.state === "building";
+        const hint = button.querySelector("small");
+        if (hint && status.message) hint.textContent = status.message;
+      });
+      window.algoApp.getNativeTools().then(function (tools) {
+        (tools || []).forEach(function (tool) {
+          const item = document.createElement("li");
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "tool";
+          button.dataset.native = tool.id;
+          button.dataset.state = tool.state || "idle";
+          button.appendChild(document.createTextNode(tool.title));
+          const hint = document.createElement("small");
+          hint.textContent = tool.state === "running" ? "调试窗口已打开" : tool.detail;
+          button.appendChild(hint);
+          button.addEventListener("click", function () {
+            button.disabled = true;
+            window.algoApp.launchNative(tool.id).then(function (result) {
+              button.disabled = result && result.state === "building";
+              button.dataset.state = (result && result.state) || "idle";
+              if (result && result.message) hint.textContent = result.message;
+            }).catch(function () {
+              button.disabled = false;
+              hint.textContent = "无法启动";
+            });
+          });
+          item.appendChild(button);
+          nativeList.appendChild(item);
+        });
+      }).catch(function () {
+        nativeList.parentElement.querySelector("h2").hidden = true;
+      });
+    }
+
+    mountNativeTools();
 
     if (window.algoApp && typeof window.algoApp.getDemos === "function") {
     window.algoApp.getDemos().then(function (demos) {

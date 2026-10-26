@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { createStaticServer, listen } = require("./static-server");
@@ -50,8 +51,101 @@ function parseReadyDemos(yamlText) {
 let server = null;
 let readyDemos = [];
 let appPort = 0;
+const nativeChildren = new Map();
+
+const nativeTools = [
+  {
+    id: "cpu-path-tracing-debug",
+    title: "CPU路径追踪调试",
+    detail: "本机窗口，并排看 MIS 开和关",
+    cwd: path.join(repoRoot, "CPUPathTracing"),
+    bin: path.join(repoRoot, "CPUPathTracing", "build", "release", "debug_gui")
+  }
+];
+
+function nativeCatalog() {
+  return nativeTools.map((tool) => ({
+    id: tool.id,
+    title: tool.title,
+    detail: tool.detail,
+    state: nativeState(tool.id)
+  }));
+}
+
+function nativeState(id) {
+  const child = nativeChildren.get(id);
+  if (child && child.exitCode === null && !child.killed) return "running";
+  return "idle";
+}
+
+function broadcast(channel, payload) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(channel, payload);
+  }
+}
+
+function compileNative(tool) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("bash", ["build.sh", "gui-build"], { cwd: tool.cwd });
+    let err = "";
+    child.stderr.on("data", (chunk) => {
+      err += chunk.toString();
+      if (err.length > 4000) err = err.slice(-4000);
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0 && fs.existsSync(tool.bin)) resolve();
+      else reject(new Error(err.trim() || "编译失败"));
+    });
+  });
+}
+
+function startNative(tool) {
+  const child = spawn(tool.bin, [], { cwd: tool.cwd, stdio: "ignore" });
+  nativeChildren.set(tool.id, child);
+  child.on("exit", () => {
+    if (nativeChildren.get(tool.id) === child) nativeChildren.delete(tool.id);
+    broadcast("native-status", {
+      id: tool.id,
+      state: "idle",
+      message: tool.detail
+    });
+  });
+  child.on("error", (err) => {
+    broadcast("native-status", {
+      id: tool.id,
+      state: "idle",
+      message: err.message
+    });
+  });
+  broadcast("native-status", {
+    id: tool.id,
+    state: "running",
+    message: "调试窗口已打开"
+  });
+}
 
 ipcMain.handle("get-demos", () => readyDemos);
+ipcMain.handle("get-native-tools", () => nativeCatalog());
+ipcMain.handle("launch-native", async (_event, id) => {
+  const tool = nativeTools.find((item) => item.id === id);
+  if (!tool) return { ok: false, message: "未知工具" };
+  if (nativeState(tool.id) === "running") {
+    return { ok: true, state: "running", message: "调试窗口已打开" };
+  }
+  try {
+    if (!fs.existsSync(tool.bin)) {
+      broadcast("native-status", { id: tool.id, state: "building", message: "正在编译…" });
+      await compileNative(tool);
+    }
+    startNative(tool);
+    return { ok: true, state: "running", message: "调试窗口已打开" };
+  } catch (err) {
+    const message = err && err.message ? err.message : "无法启动";
+    broadcast("native-status", { id: tool.id, state: "idle", message: message });
+    return { ok: false, state: "idle", message: message };
+  }
+});
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -119,5 +213,8 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", () => {
+  for (const child of nativeChildren.values()) {
+    if (child.exitCode === null) child.kill();
+  }
   if (server) server.close();
 });

@@ -1,7 +1,12 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("algoApp", {
-  getDemos: () => ipcRenderer.invoke("get-demos")
+  getDemos: () => ipcRenderer.invoke("get-demos"),
+  getNativeTools: () => ipcRenderer.invoke("get-native-tools"),
+  launchNative: (id) => ipcRenderer.invoke("launch-native", id),
+  onNativeStatus: (callback) => {
+    ipcRenderer.on("native-status", (_event, status) => callback(status));
+  }
 });
 
 function mountBackButton() {
