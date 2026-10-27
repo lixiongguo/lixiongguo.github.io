@@ -90,3 +90,9 @@
   title: Voronoi / Delaunay
   url: /voronoi_delaunay.html
   ready: false
+
+- id: quad-meshing
+  title: 四边形网格
+  url: /quad_meshing.html
+  models_dir: assets/Models2
+  ready: true

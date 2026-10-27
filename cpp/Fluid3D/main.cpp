@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include <cfloat>
+#include <cstdlib>
 
 #include "fluidsim.h"
 #include "array3_utils.h"
@@ -40,12 +41,21 @@ void export_particles(string path, int frame, const std::vector<Vec3f>& particle
 int main(int argc, char **argv)
 {
    
-   if(argc!=2){
-      cerr << "The first parameter should be the folder to write the output liquid meshes into. (eg. c:\\output\\)" << endl;
+   if(argc != 2 && argc != 3){
+      cerr << "Usage: solver <output-folder/> [frames]" << endl;
+      cerr << "  frames defaults to 1000. The folder path should end with a separator." << endl;
       return 1;
    }
 
    string outpath(argv[1]);
+   int frame_count = 1000;
+   if(argc == 3){
+      frame_count = atoi(argv[2]);
+      if(frame_count < 1){
+         cerr << "frames must be >= 1" << endl;
+         return 1;
+      }
+   }
    
    printf("Initializing data\n");
    sim.initialize(grid_width, grid_resolution, grid_resolution, grid_resolution);
@@ -59,7 +69,7 @@ int main(int argc, char **argv)
    printf("Exporting initial data\n");
    export_particles(outpath, 0, sim.particles, sim.particle_radius);
 
-   for(frame = 1; frame <1000; ++frame) {
+   for(frame = 1; frame < frame_count; ++frame) {
       printf("--------------------\nFrame %d\n", frame);
       
       //Simulate

@@ -1,6 +1,5 @@
 #include "camera/camera.hpp"
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 Camera::Camera(Film &film, const glm::vec3 &pos, const glm::vec3 &viewpoint, float fovy)
     : film(film), pos(pos), fovy(fovy) {

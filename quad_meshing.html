@@ -1,0 +1,1236 @@
+---
+---
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+{% include algo_demo_models_dir.html id="quad-meshing" %}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>四边形网格</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/"
+    }
+  }
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      background: #1d1d1d;
+      color: #e6e6e6;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    .app { display: flex; flex-direction: column; height: 100vh; }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      padding: 10px 16px;
+      background: #2a2a2a;
+      border-bottom: 1px solid #111;
+      flex-shrink: 0;
+    }
+    .toolbar h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: #f0f0f0;
+    }
+    .toolbar label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #cfcfcf;
+    }
+    .toolbar label[hidden] { display: none; }
+    .checks { display: inline-flex; align-items: center; gap: 10px; }
+    .checks[hidden] { display: none; }
+    select {
+      background: #1d1d1d;
+      color: #f0f0f0;
+      border: 1px solid #4a4a4a;
+      border-radius: 4px;
+      padding: 5px 8px;
+      font: inherit;
+      font-size: 13px;
+    }
+    input[type="checkbox"], input[type="range"] { accent-color: #e87d0d; }
+    input[type="range"] { width: 88px; }
+    .stats {
+      margin-left: auto;
+      font-size: 13px;
+      color: #bdbdbd;
+      font-variant-numeric: tabular-nums;
+    }
+    details.timing {
+      font-size: 12px;
+      color: #bdbdbd;
+    }
+    details.timing summary {
+      cursor: pointer;
+      user-select: none;
+    }
+    details.timing[open] { flex-basis: 100%; }
+    details.timing ol {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 16px;
+      margin: 6px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    #timing-list li.run { color: #e87d0d; }
+    #timing-list li.skip { color: #8a8a8a; }
+    #timing-list li.stop, #timing-list li.fail { color: #e07070; }
+    button.stop {
+      background: transparent;
+      color: #f0c9a0;
+      border: 1px solid #e87d0d;
+      border-radius: 4px;
+      padding: 5px 10px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+    }
+    button.stop[hidden] { display: none; }
+    .viewport { flex: 1; min-height: 0; position: relative; background: #393939; }
+    canvas { display: block; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="toolbar">
+      <h1>四边形网格</h1>
+      <label>模型
+        <select id="model-select"></select>
+      </label>
+      <label>算法
+        <select id="algo-select">
+          <option value="naive" selected>朴素合并</option>
+          <option value="miq">MIQ</option>
+          <option value="quadcover">QuadCover</option>
+        </select>
+      </label>
+      <label id="density-label" hidden>密度 <input id="grid-div" type="range" min="4" max="28" value="10"></label>
+      <label id="view-label" hidden>查看
+        <select id="view-select">
+          <option value="cross">交叉场</option>
+          <option value="param" disabled>参数化网格</option>
+        </select>
+      </label>
+      <span id="cross-options" class="checks" hidden>
+        <label><input type="checkbox" id="show-dirs" checked> 方向</label>
+        <label><input type="checkbox" id="show-jumps" checked> 跳跃</label>
+        <label><input type="checkbox" id="show-sings" checked> 奇异点</label>
+      </span>
+      <label><input type="checkbox" id="show-surface" checked> 表面</label>
+      <label><input type="checkbox" id="show-wire" checked> 线框</label>
+      <button type="button" class="stop" id="stop-run" hidden>停止</button>
+      <div class="stats" id="stats">正在加载…</div>
+      <details class="timing" id="timing-panel">
+        <summary id="timing-summary">流水线耗时</summary>
+        <ol id="timing-list"></ol>
+      </details>
+    </div>
+    <div class="viewport">
+      <canvas id="view"></canvas>
+    </div>
+  </div>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const FALLBACK_MODELS = [
+      "3holes_F7200.obj",
+      "costa.obj",
+      "double-torus_F6144.obj",
+      "elephant.obj",
+      "kitten_F18894.obj",
+      "rocker-arm_F20088.obj",
+      "torus_F7680.obj"
+    ];
+
+    const MODELS_DIR = (window.ALGO_MODELS_DIR || "assets/Models2").replace(/^\/+|\/+$/g, "");
+    const modelFiles = (window.ALGO_MODEL_FILES && window.ALGO_MODEL_FILES.length)
+      ? window.ALGO_MODEL_FILES.slice().sort()
+      : FALLBACK_MODELS;
+
+    const modelSelect = document.getElementById("model-select");
+    const algoSelect = document.getElementById("algo-select");
+    const densityLabel = document.getElementById("density-label");
+    const viewLabel = document.getElementById("view-label");
+    const viewSelect = document.getElementById("view-select");
+    const crossOptions = document.getElementById("cross-options");
+    const showDirs = document.getElementById("show-dirs");
+    const showJumps = document.getElementById("show-jumps");
+    const showSings = document.getElementById("show-sings");
+    const gridDiv = document.getElementById("grid-div");
+    const timingPanel = document.getElementById("timing-panel");
+    const timingSummary = document.getElementById("timing-summary");
+    const timingList = document.getElementById("timing-list");
+    const stopButton = document.getElementById("stop-run");
+    const showSurface = document.getElementById("show-surface");
+    const showWire = document.getElementById("show-wire");
+    const statsEl = document.getElementById("stats");
+    const canvas = document.getElementById("view");
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x393939);
+
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 50);
+    camera.position.set(1.15, 0.75, 1.35);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.38));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
+    keyLight.position.set(0.55, 1.05, 0.85);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xd5dbe8, 0.42);
+    fillLight.position.set(-0.9, 0.25, -0.45);
+    scene.add(fillLight);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.target.set(0, 0, 0);
+
+    const quadMaterial = new THREE.MeshStandardMaterial({
+      color: 0xb8b8b8,
+      roughness: 0.72,
+      metalness: 0,
+      side: THREE.DoubleSide,
+      flatShading: false,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1
+    });
+    const triMaterial = new THREE.MeshStandardMaterial({
+      color: 0xd39a6a,
+      roughness: 0.72,
+      metalness: 0,
+      side: THREE.DoubleSide,
+      flatShading: false,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1
+    });
+    const quadLineMaterial = new THREE.LineBasicMaterial({ color: 0x1c1c1c });
+    const triLineMaterial = new THREE.LineBasicMaterial({ color: 0x6b3a16 });
+    const crossDirMaterial = new THREE.LineBasicMaterial({ color: 0xe87d0d });
+    const crossOrthoMaterial = new THREE.LineBasicMaterial({ color: 0x4aa3d8 });
+    const jumpMaterial = new THREE.LineBasicMaterial({ vertexColors: true });
+    const singMaterial = new THREE.PointsMaterial({
+      color: 0xff5a5a,
+      size: 9,
+      sizeAttenuation: false
+    });
+
+    let currentRoot = null;
+
+    function edgeKey(a, b) {
+      return a < b ? a + "_" + b : b + "_" + a;
+    }
+
+    function parseOBJ(text) {
+      const verts = [];
+      const faces = [];
+      const lines = text.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith("v ")) {
+          const p = line.split(/\s+/);
+          verts.push([Number(p[1]), Number(p[2]), Number(p[3])]);
+          continue;
+        }
+        if (!line.startsWith("f ") && !line.startsWith("f\t")) continue;
+        const parts = line.slice(1).trim().split(/\s+/);
+        const idx = [];
+        for (let j = 0; j < parts.length; j++) {
+          const raw = parseInt(parts[j].split("/")[0], 10);
+          if (Number.isNaN(raw) || raw === 0) continue;
+          idx.push(raw > 0 ? raw - 1 : verts.length + raw);
+        }
+        if (idx.length < 3) continue;
+        for (let k = 1; k < idx.length - 1; k++) {
+          const a = idx[0];
+          const b = idx[k];
+          const c = idx[k + 1];
+          if (a !== b && b !== c && c !== a) faces.push([a, b, c]);
+        }
+      }
+      return { verts, faces };
+    }
+
+    function centerAndScale(verts) {
+      const min = [Infinity, Infinity, Infinity];
+      const max = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < verts.length; i++) {
+        const v = verts[i];
+        for (let k = 0; k < 3; k++) {
+          if (v[k] < min[k]) min[k] = v[k];
+          if (v[k] > max[k]) max[k] = v[k];
+        }
+      }
+      const size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || 1;
+      const scale = 1 / size;
+      const cx = (min[0] + max[0]) * 0.5;
+      const cy = (min[1] + max[1]) * 0.5;
+      const cz = (min[2] + max[2]) * 0.5;
+      const out = new Array(verts.length);
+      for (let i = 0; i < verts.length; i++) {
+        const v = verts[i];
+        out[i] = [(v[0] - cx) * scale, (v[1] - cy) * scale, (v[2] - cz) * scale];
+      }
+      return out;
+    }
+
+    function newellNormal(verts, loop) {
+      let nx = 0;
+      let ny = 0;
+      let nz = 0;
+      for (let i = 0; i < loop.length; i++) {
+        const p = verts[loop[i]];
+        const q = verts[loop[(i + 1) % loop.length]];
+        nx += (p[1] - q[1]) * (p[2] + q[2]);
+        ny += (p[2] - q[2]) * (p[0] + q[0]);
+        nz += (p[0] - q[0]) * (p[1] + q[1]);
+      }
+      let len = Math.hypot(nx, ny, nz);
+      if (len < 1e-12 && loop.length >= 3) {
+        const a = verts[loop[0]];
+        const b = verts[loop[1]];
+        const c = verts[loop[2]];
+        const ux = b[0] - a[0];
+        const uy = b[1] - a[1];
+        const uz = b[2] - a[2];
+        const vx = c[0] - a[0];
+        const vy = c[1] - a[1];
+        const vz = c[2] - a[2];
+        nx = uy * vz - uz * vy;
+        ny = uz * vx - ux * vz;
+        nz = ux * vy - uy * vx;
+        len = Math.hypot(nx, ny, nz);
+      }
+      if (len < 1e-12) return [0, 1, 0];
+      return [nx / len, ny / len, nz / len];
+    }
+
+    function loadClassicScript(src) {
+      return new Promise(function (resolve, reject) {
+        const existing = document.querySelector('script[data-quad-src="' + src + '"]');
+        if (existing) {
+          if (existing.dataset.loaded === "1") resolve();
+          else existing.addEventListener("load", function () { resolve(); }, { once: true });
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = src;
+        script.dataset.quadSrc = src;
+        script.onload = function () { script.dataset.loaded = "1"; resolve(); };
+        script.onerror = function () { reject(new Error("无法加载 " + src)); };
+        document.head.appendChild(script);
+      });
+    }
+
+    let mergeInst = null;
+    async function mergeSolver() {
+      if (mergeInst) return mergeInst;
+      await loadClassicScript("assets/js/wasm-loader.js");
+      await loadClassicScript("assets/wasm/naive_quad.js");
+      if (typeof window.NaiveQuadMerge !== "function") throw new Error("合并模块未加载");
+      mergeInst = await window.NaiveQuadMerge({
+        locateFile: function (file) { return "assets/wasm/" + file; }
+      });
+      return mergeInst;
+    }
+
+    function wasmWriteDoubles(inst, values) {
+      const ptr = inst._malloc(values.length * 8);
+      for (let i = 0; i < values.length; i++) inst.setValue(ptr + i * 8, values[i], "double");
+      return ptr;
+    }
+
+    function wasmWriteInts(inst, values) {
+      const ptr = inst._malloc(values.length * 4);
+      for (let i = 0; i < values.length; i++) inst.setValue(ptr + i * 4, values[i] | 0, "i32");
+      return ptr;
+    }
+
+    function readFaces(inst, ptr, count, stride) {
+      const faces = new Array(count);
+      for (let i = 0; i < count; i++) {
+        const face = new Array(stride);
+        const base = ptr + i * stride * 4;
+        for (let k = 0; k < stride; k++) face[k] = inst.getValue(base + k * 4, "i32");
+        faces[i] = face;
+      }
+      return faces;
+    }
+
+    async function mergeTriangles(verts, faces) {
+      const inst = await mergeSolver();
+      const flatPos = new Float64Array(verts.length * 3);
+      for (let i = 0; i < verts.length; i++) {
+        flatPos[i * 3] = verts[i][0];
+        flatPos[i * 3 + 1] = verts[i][1];
+        flatPos[i * 3 + 2] = verts[i][2];
+      }
+      const flatFaces = new Int32Array(faces.length * 3);
+      for (let i = 0; i < faces.length; i++) {
+        flatFaces[i * 3] = faces[i][0];
+        flatFaces[i * 3 + 1] = faces[i][1];
+        flatFaces[i * 3 + 2] = faces[i][2];
+      }
+      const posPtr = wasmWriteDoubles(inst, flatPos);
+      const facePtr = wasmWriteInts(inst, flatFaces);
+      try {
+        const t0 = performance.now();
+        const rc = inst.ccall(
+          "merge_tris_to_quads", "number",
+          ["number", "number", "number", "number"],
+          [posPtr, verts.length, facePtr, faces.length]
+        );
+        if (rc !== 0) throw new Error("merge " + rc);
+        const quadCount = inst.ccall("get_quad_count", "number", [], []);
+        const quadPtr = inst.ccall("get_quads", "number", [], []);
+        const triCount = inst.ccall("get_leftover_count", "number", [], []);
+        const triPtr = inst.ccall("get_leftovers", "number", [], []);
+        const quads = quadCount > 0 ? readFaces(inst, quadPtr, quadCount, 4) : [];
+        const leftovers = triCount > 0 ? readFaces(inst, triPtr, triCount, 3) : [];
+        return { quads: quads, leftovers: leftovers, stages: readStages(inst), timeMs: performance.now() - t0 };
+      } finally {
+        inst._free(posPtr);
+        inst._free(facePtr);
+      }
+    }
+
+    function readStages(inst) {
+      const count = inst.ccall("get_stage_count", "number", [], []);
+      const stages = [];
+      for (let i = 0; i < count; i++) {
+        stages.push({
+          name: inst.ccall("get_stage_name", "string", ["number"], [i]) || ("阶段 " + (i + 1)),
+          ms: inst.ccall("get_stage_ms", "number", ["number"], [i])
+        });
+      }
+      return stages;
+    }
+
+    function formatMs(ms) {
+      if (!Number.isFinite(ms)) return "—";
+      if (ms < 10) return ms.toFixed(1) + " ms";
+      if (ms < 1000) return Math.round(ms) + " ms";
+      return (ms / 1000).toFixed(1) + " s";
+    }
+
+    function showStages(stages) {
+      timingList.replaceChildren();
+      let total = 0;
+      for (let i = 0; i < stages.length; i++) {
+        total += stages[i].ms || 0;
+        const item = document.createElement("li");
+        item.dataset.name = stages[i].name;
+        item.dataset.state = stages[i].skipped ? "skip" : "done";
+        item.dataset.ms = String(stages[i].ms || 0);
+        item.className = item.dataset.state;
+        item.textContent = stages[i].skipped
+          ? stages[i].name + " · 跳过"
+          : stages[i].name + " " + formatMs(stages[i].ms);
+        timingList.appendChild(item);
+      }
+      timingSummary.textContent = stages.length ? ("流水线 · " + formatMs(total)) : "流水线耗时";
+    }
+
+    function showPlan(names) {
+      timingList.replaceChildren();
+      for (let i = 0; i < names.length; i++) {
+        const item = document.createElement("li");
+        item.dataset.name = names[i];
+        item.dataset.state = "wait";
+        item.textContent = names[i];
+        timingList.appendChild(item);
+      }
+      timingPanel.open = true;
+      timingSummary.textContent = "流水线 · " + names.length + " 个阶段";
+    }
+
+    function refreshSummary() {
+      let total = 0;
+      let current = "";
+      for (const item of timingList.children) {
+        if (item.dataset.state === "done") total += Number(item.dataset.ms) || 0;
+        if (item.dataset.state === "run") current = item.dataset.name;
+      }
+      timingSummary.textContent = current ? ("流水线 · " + current) : ("流水线 · " + formatMs(total));
+    }
+
+    function markStage(index, state, ms) {
+      const item = timingList.children[index];
+      if (!item) return;
+      const name = item.dataset.name || ("阶段 " + (index + 1));
+      item.dataset.state = state;
+      item.className = state;
+      if (state === "run") item.textContent = name + " · 进行中";
+      else if (state === "done") {
+        item.dataset.ms = String(ms || 0);
+        item.textContent = name + " " + formatMs(ms);
+      } else if (state === "skip") item.textContent = name + " · 跳过";
+      else if (state === "stop") item.textContent = name + " · 已停止";
+      else if (state === "fail") item.textContent = name + " · 失败";
+      else item.textContent = name;
+      refreshSummary();
+    }
+
+    function markProgress(done, total) {
+      let current = null;
+      for (const item of timingList.children) {
+        if (item.dataset.state === "run") current = item;
+      }
+      if (!current || !(total > 0)) return;
+      const pct = Math.max(0, Math.min(100, Math.round((done * 100) / total)));
+      current.dataset.pct = String(pct);
+      current.textContent = current.dataset.name + " · " + pct + "%";
+      timingSummary.textContent = "流水线 · " + current.dataset.name + " " + pct + "%";
+    }
+
+    function markStopped() {
+      for (const item of timingList.children) {
+        if (item.dataset.state === "run" || item.dataset.state === "wait") {
+          item.dataset.state = "stop";
+          item.className = "stop";
+          item.textContent = item.dataset.name + " · 已停止";
+        }
+      }
+      timingSummary.textContent = "流水线 · 已停止";
+    }
+
+    function collectStages() {
+      const stages = [];
+      for (const item of timingList.children) {
+        stages.push({
+          name: item.dataset.name,
+          ms: Number(item.dataset.ms) || 0,
+          skipped: item.dataset.state === "skip"
+        });
+      }
+      return stages;
+    }
+
+    function paint() {
+      return new Promise(function (resolve) { requestAnimationFrame(function () { resolve(); }); });
+    }
+
+    let fieldInst = null;
+    async function fieldSolver() {
+      if (fieldInst) return fieldInst;
+      await loadClassicScript("assets/wasm/uv_unwrap_field.js");
+      if (typeof window.UvUnwrapFieldSolver !== "function") throw new Error("场求解模块未加载");
+      fieldInst = await window.UvUnwrapFieldSolver({
+        locateFile: function (file) { return "assets/wasm/" + file; }
+      });
+      return fieldInst;
+    }
+
+    function uploadFieldMesh(inst, verts, faces) {
+      const flatPos = new Float64Array(verts.length * 3);
+      for (let i = 0; i < verts.length; i++) {
+        flatPos[i * 3] = verts[i][0];
+        flatPos[i * 3 + 1] = verts[i][1];
+        flatPos[i * 3 + 2] = verts[i][2];
+      }
+      const flatFaces = new Int32Array(faces.length * 3);
+      for (let i = 0; i < faces.length; i++) {
+        flatFaces[i * 3] = faces[i][0];
+        flatFaces[i * 3 + 1] = faces[i][1];
+        flatFaces[i * 3 + 2] = faces[i][2];
+      }
+      const posPtr = wasmWriteDoubles(inst, flatPos);
+      const facePtr = wasmWriteInts(inst, flatFaces);
+      const rc = inst.ccall("load_mesh", "number", ["number", "number", "number", "number"], [posPtr, flatPos.length, facePtr, flatFaces.length]);
+      inst._free(posPtr);
+      inst._free(facePtr);
+      if (rc !== 0) throw new Error("load_mesh " + rc);
+    }
+
+    async function solveField(algo, verts, faces) {
+      const inst = await fieldSolver();
+      uploadFieldMesh(inst, verts, faces);
+      await paint();
+      const t0 = performance.now();
+      let rc = 0;
+      if (algo === "miq") rc = inst.ccall("solve_miq", "number", ["number", "number"], [12, 2]);
+      else rc = inst.ccall("step3_solve_quadcover", "number", ["number"], [1]);
+      if (rc !== 0) {
+        const failed = new Error((algo === "miq" ? "MIQ" : "QuadCover") + " 失败 (" + rc + ")");
+        failed.stages = readStages(inst);
+        inst.ccall("dispose", "void", [], []);
+        throw failed;
+      }
+      const stages = readStages(inst);
+      const solverMs = inst.ccall("get_last_time_ms", "number", [], []);
+      const uvCount = inst.ccall("get_uv_result_size", "number", [], []);
+      const uvPtr = inst.ccall("get_uv_result", "number", [], []);
+      if (!uvPtr || uvCount < verts.length * 2) throw new Error("没有参数化坐标");
+      const uv = new Array(verts.length);
+      for (let i = 0; i < verts.length; i++) {
+        uv[i] = [
+          inst.getValue(uvPtr + (i * 2) * 8, "double"),
+          inst.getValue(uvPtr + (i * 2 + 1) * 8, "double")
+        ];
+      }
+      let corners = null;
+      const cornerCount = inst.ccall("get_corner_uv_size", "number", [], []);
+      const cornerPtr = inst.ccall("get_corner_uv", "number", [], []);
+      if (cornerPtr && cornerCount >= faces.length * 6) {
+        corners = new Array(faces.length);
+        for (let fi = 0; fi < faces.length; fi++) {
+          const base = cornerPtr + fi * 48;
+          corners[fi] = [
+            [inst.getValue(base, "double"), inst.getValue(base + 8, "double")],
+            [inst.getValue(base + 16, "double"), inst.getValue(base + 24, "double")],
+            [inst.getValue(base + 32, "double"), inst.getValue(base + 40, "double")]
+          ];
+        }
+      }
+      inst.ccall("dispose", "void", [], []);
+      if (!stages.length) stages.push({ name: algo === "miq" ? "MIQ" : "QuadCover", ms: solverMs || (performance.now() - t0) });
+      return { uv: uv, corners: corners, stages: stages, timeMs: solverMs || (performance.now() - t0) };
+    }
+
+    function lerp3(a, b, t) {
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+    }
+
+    function traceGrid(verts, faces, uv, corners, divisions) {
+      let uMin = Infinity, vMin = Infinity, uMax = -Infinity, vMax = -Infinity;
+      function uvAt(fi, k) {
+        if (corners) return corners[fi][k];
+        return uv[faces[fi][k]];
+      }
+      for (let fi = 0; fi < faces.length; fi++) {
+        for (let k = 0; k < 3; k++) {
+          const q = uvAt(fi, k);
+          if (!q || !Number.isFinite(q[0]) || !Number.isFinite(q[1])) continue;
+          if (q[0] < uMin) uMin = q[0];
+          if (q[1] < vMin) vMin = q[1];
+          if (q[0] > uMax) uMax = q[0];
+          if (q[1] > vMax) vMax = q[1];
+        }
+      }
+      const span = Math.max(uMax - uMin, vMax - vMin);
+      if (!(span > 1e-8)) throw new Error("参数化坐标没有展开");
+      const scale = divisions / span;
+      const positions = [];
+      const seen = new Set();
+      const cells = new Set();
+
+      function quant(p) {
+        return Math.round(p[0] * 1e5) + "," + Math.round(p[1] * 1e5) + "," + Math.round(p[2] * 1e5);
+      }
+      function addSegment(a, b) {
+        const ka = quant(a);
+        const kb = quant(b);
+        if (ka === kb) return;
+        const key = ka < kb ? ka + "|" + kb : kb + "|" + ka;
+        if (seen.has(key)) return;
+        seen.add(key);
+        positions.push(a[0], a[1], a[2], b[0], b[1], b[2]);
+      }
+      function bary(q, p) {
+        const d00 = (q[1][0] - q[0][0]) * (q[1][0] - q[0][0]) + (q[1][1] - q[0][1]) * (q[1][1] - q[0][1]);
+        const d01 = (q[1][0] - q[0][0]) * (q[2][0] - q[0][0]) + (q[1][1] - q[0][1]) * (q[2][1] - q[0][1]);
+        const d11 = (q[2][0] - q[0][0]) * (q[2][0] - q[0][0]) + (q[2][1] - q[0][1]) * (q[2][1] - q[0][1]);
+        const d20 = (p[0] - q[0][0]) * (q[1][0] - q[0][0]) + (p[1] - q[0][1]) * (q[1][1] - q[0][1]);
+        const d21 = (p[0] - q[0][0]) * (q[2][0] - q[0][0]) + (p[1] - q[0][1]) * (q[2][1] - q[0][1]);
+        const den = d00 * d11 - d01 * d01;
+        if (Math.abs(den) < 1e-14) return false;
+        const v = (d11 * d20 - d01 * d21) / den;
+        const w = (d00 * d21 - d01 * d20) / den;
+        const u = 1 - v - w;
+        return u >= -1e-4 && v >= -1e-4 && w >= -1e-4;
+      }
+
+      for (let fi = 0; fi < faces.length; fi++) {
+        const f = faces[fi];
+        const p = [verts[f[0]], verts[f[1]], verts[f[2]]];
+        const raw = [uvAt(fi, 0), uvAt(fi, 1), uvAt(fi, 2)];
+        if (raw.some(function (q) { return !q || !Number.isFinite(q[0]) || !Number.isFinite(q[1]); })) continue;
+        const q = raw.map(function (c) { return [(c[0] - uMin) * scale, (c[1] - vMin) * scale]; });
+        for (let axis = 0; axis < 2; axis++) {
+          let lo = Math.min(q[0][axis], q[1][axis], q[2][axis]);
+          let hi = Math.max(q[0][axis], q[1][axis], q[2][axis]);
+          for (let g = Math.ceil(lo - 1e-8); g <= Math.floor(hi + 1e-8); g++) {
+            const hits = [];
+            for (let e = 0; e < 3; e++) {
+              const i0 = e;
+              const i1 = (e + 1) % 3;
+              const d = q[i1][axis] - q[i0][axis];
+              if (Math.abs(d) < 1e-12) continue;
+              const t = (g - q[i0][axis]) / d;
+              if (t < -1e-5 || t > 1 + 1e-5) continue;
+              hits.push(lerp3(p[i0], p[i1], Math.min(1, Math.max(0, t))));
+            }
+            const uniq = [];
+            for (let h = 0; h < hits.length; h++) {
+              if (!uniq.some(function (u) { return Math.hypot(u[0] - hits[h][0], u[1] - hits[h][1], u[2] - hits[h][2]) < 1e-7; })) uniq.push(hits[h]);
+            }
+            if (uniq.length >= 2) addSegment(uniq[0], uniq[1]);
+          }
+        }
+        const u0 = Math.floor(Math.min(q[0][0], q[1][0], q[2][0]));
+        const u1 = Math.floor(Math.max(q[0][0], q[1][0], q[2][0]) - 1e-8);
+        const v0 = Math.floor(Math.min(q[0][1], q[1][1], q[2][1]));
+        const v1 = Math.floor(Math.max(q[0][1], q[1][1], q[2][1]) - 1e-8);
+        for (let iu = u0; iu <= u1; iu++) {
+          for (let iv = v0; iv <= v1; iv++) {
+            const inside = [[iu, iv], [iu + 1, iv], [iu + 1, iv + 1], [iu, iv + 1]].some(function (c) { return bary(q, c); });
+            const covers = q.some(function (c) { return c[0] >= iu && c[0] <= iu + 1 && c[1] >= iv && c[1] <= iv + 1; });
+            if (inside || covers) cells.add(iu + "_" + iv);
+          }
+        }
+      }
+      return { positions: positions, cells: cells.size };
+    }
+
+    function pushTriangle(positions, normals, verts, i0, i1, i2, normal) {
+      const ids = [i0, i1, i2];
+      for (let k = 0; k < 3; k++) {
+        const v = verts[ids[k]];
+        positions.push(v[0], v[1], v[2]);
+        normals.push(normal[0], normal[1], normal[2]);
+      }
+    }
+
+    function boundaryPositions(verts, faces, skip) {
+      const out = [];
+      const seen = new Set();
+      for (let i = 0; i < faces.length; i++) {
+        const f = faces[i];
+        for (let k = 0; k < f.length; k++) {
+          const a = f[k];
+          const b = f[(k + 1) % f.length];
+          const key = edgeKey(a, b);
+          if (seen.has(key) || (skip && skip.has(key))) continue;
+          seen.add(key);
+          const p = verts[a];
+          const q = verts[b];
+          out.push(p[0], p[1], p[2], q[0], q[1], q[2]);
+        }
+      }
+      return out;
+    }
+
+    function makeMesh(positions, normals, material) {
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geom.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+      return new THREE.Mesh(geom, material);
+    }
+
+    function makeLines(positions, material) {
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      const lines = new THREE.LineSegments(geom, material);
+      lines.userData.wire = true;
+      return lines;
+    }
+
+    function buildSurface(verts, faces, material) {
+      const pos = [];
+      const nrm = [];
+      for (let i = 0; i < faces.length; i++) {
+        const f = faces[i];
+        const normal = newellNormal(verts, f);
+        if (f.length === 3) {
+          pushTriangle(pos, nrm, verts, f[0], f[1], f[2], normal);
+        } else {
+          pushTriangle(pos, nrm, verts, f[0], f[1], f[2], normal);
+          pushTriangle(pos, nrm, verts, f[0], f[2], f[3], normal);
+        }
+      }
+      return makeMesh(pos, nrm, material);
+    }
+
+    function buildSmoothSurface(verts, faces, material) {
+      const acc = new Array(verts.length);
+      for (let i = 0; i < verts.length; i++) acc[i] = [0, 0, 0];
+      for (let i = 0; i < faces.length; i++) {
+        const f = faces[i];
+        const n = newellNormal(verts, f);
+        for (let k = 0; k < f.length; k++) {
+          acc[f[k]][0] += n[0];
+          acc[f[k]][1] += n[1];
+          acc[f[k]][2] += n[2];
+        }
+      }
+      for (let i = 0; i < acc.length; i++) {
+        const len = Math.hypot(acc[i][0], acc[i][1], acc[i][2]);
+        if (len > 1e-12) { acc[i][0] /= len; acc[i][1] /= len; acc[i][2] /= len; }
+        else acc[i] = [0, 1, 0];
+      }
+      const pos = [];
+      const nrm = [];
+      for (let i = 0; i < faces.length; i++) {
+        const f = faces[i];
+        for (let k = 0; k < 3; k++) {
+          const v = verts[f[k]];
+          const n = acc[f[k]];
+          pos.push(v[0], v[1], v[2]);
+          nrm.push(n[0], n[1], n[2]);
+        }
+      }
+      return makeMesh(pos, nrm, material);
+    }
+
+    function disposeRoot(root) {
+      root.traverse(function (child) {
+        if (child.geometry) child.geometry.dispose();
+      });
+    }
+
+    function applyVisibility() {
+      if (!currentRoot) return;
+      const surface = showSurface.checked;
+      const wire = showWire.checked;
+      currentRoot.traverse(function (child) {
+        if (child.isMesh) child.visible = surface;
+        if (child.isLineSegments) child.visible = child.userData.field ? true : wire;
+        if (child.isPoints) child.visible = true;
+      });
+    }
+
+    function resize() {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      if (width < 1 || height < 1) return;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+    }
+
+    let analysisView = null;
+
+    function hideAnalysisChrome() {
+      analysisView = null;
+      viewLabel.hidden = true;
+      crossOptions.hidden = true;
+      viewSelect.value = "cross";
+      const paramOption = viewSelect.querySelector('option[value="param"]');
+      if (paramOption) paramOption.disabled = true;
+    }
+
+    function syncAnalysisChrome() {
+      const active = !!(analysisView && analysisView.dirs);
+      viewLabel.hidden = !active;
+      const showingCross = active && viewSelect.value === "cross";
+      crossOptions.hidden = !showingCross;
+      densityLabel.hidden = algoSelect.value === "naive" || (active && viewSelect.value !== "param");
+      const paramOption = viewSelect.querySelector('option[value="param"]');
+      if (paramOption) paramOption.disabled = !(analysisView && analysisView.grid);
+    }
+
+    function jumpColor(jump) {
+      const mag = Math.abs(jump);
+      if (mag >= 2) return [0.91, 0.30, 0.24];
+      return jump > 0 ? [0.94, 0.77, 0.29] : [0.35, 0.78, 0.55];
+    }
+
+    function drawCrossAnalysis(view) {
+      const verts = view.verts;
+      const faces = view.faces;
+      const dirs = view.dirs;
+      const root = new THREE.Group();
+      root.add(buildSmoothSurface(verts, faces, quadMaterial));
+      root.add(makeLines(boundaryPositions(verts, faces), quadLineMaterial));
+      let nonzero = 0;
+      if (showDirs.checked && dirs) {
+        const primary = [];
+        const ortho = [];
+        let edgeSum = 0;
+        const sample = Math.min(faces.length, 400);
+        for (let i = 0; i < sample; i++) {
+          const f = faces[i];
+          const a = verts[f[0]];
+          const b = verts[f[1]];
+          edgeSum += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+        }
+        const length = (sample ? edgeSum / sample : 0.02) * 1.15;
+        for (let fi = 0; fi < faces.length; fi++) {
+          const f = faces[fi];
+          const a = verts[f[0]];
+          const b = verts[f[1]];
+          const c = verts[f[2]];
+          const n = newellNormal(verts, f);
+          const cx = (a[0] + b[0] + c[0]) / 3 + n[0] * length * 0.08;
+          const cy = (a[1] + b[1] + c[1]) / 3 + n[1] * length * 0.08;
+          const cz = (a[2] + b[2] + c[2]) / 3 + n[2] * length * 0.08;
+          const base = fi * 6;
+          const u = [dirs[base], dirs[base + 1], dirs[base + 2]];
+          const v = [dirs[base + 3], dirs[base + 4], dirs[base + 5]];
+          const ul = Math.hypot(u[0], u[1], u[2]) || 1;
+          const vl = Math.hypot(v[0], v[1], v[2]) || 1;
+          primary.push(
+            cx - u[0] / ul * length * 0.5, cy - u[1] / ul * length * 0.5, cz - u[2] / ul * length * 0.5,
+            cx + u[0] / ul * length * 0.5, cy + u[1] / ul * length * 0.5, cz + u[2] / ul * length * 0.5
+          );
+          ortho.push(
+            cx - v[0] / vl * length * 0.5, cy - v[1] / vl * length * 0.5, cz - v[2] / vl * length * 0.5,
+            cx + v[0] / vl * length * 0.5, cy + v[1] / vl * length * 0.5, cz + v[2] / vl * length * 0.5
+          );
+        }
+        const primaryLines = makeLines(primary, crossDirMaterial);
+        const orthoLines = makeLines(ortho, crossOrthoMaterial);
+        primaryLines.userData.field = true;
+        orthoLines.userData.field = true;
+        root.add(primaryLines);
+        root.add(orthoLines);
+      }
+      if (showJumps.checked && view.edges) {
+        const positions = [];
+        const colors = [];
+        for (let i = 0; i + 2 < view.edges.length; i += 3) {
+          const jump = view.edges[i + 2];
+          if (!jump) continue;
+          nonzero++;
+          const p = verts[view.edges[i]];
+          const q = verts[view.edges[i + 1]];
+          const color = jumpColor(jump);
+          positions.push(p[0], p[1], p[2], q[0], q[1], q[2]);
+          colors.push(color[0], color[1], color[2], color[0], color[1], color[2]);
+        }
+        if (positions.length) {
+          const geom = new THREE.BufferGeometry();
+          geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+          geom.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+          const lines = new THREE.LineSegments(geom, jumpMaterial);
+          lines.userData.field = true;
+          root.add(lines);
+        }
+      } else if (view.edges) {
+        for (let i = 2; i < view.edges.length; i += 3) if (view.edges[i]) nonzero++;
+      }
+      const sings = view.singulars ? view.singulars.length : 0;
+      if (showSings.checked && sings) {
+        const positions = [];
+        for (let i = 0; i < view.singulars.length; i++) {
+          const p = verts[view.singulars[i]];
+          if (p) positions.push(p[0], p[1], p[2]);
+        }
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        const points = new THREE.Points(geom, singMaterial);
+        points.userData.field = true;
+        root.add(points);
+      }
+      if (currentRoot) {
+        scene.remove(currentRoot);
+        disposeRoot(currentRoot);
+      }
+      currentRoot = root;
+      scene.add(currentRoot);
+      applyVisibility();
+      const ready = view.grid ? " · 参数化已完成" : " · 参数化仍在继续";
+      statsEl.textContent = "交叉场 · 奇异点 " + sings + " · 非零跳跃 " + nonzero + ready;
+    }
+
+    function renderAnalysis() {
+      if (!analysisView) return;
+      syncAnalysisChrome();
+      if (viewSelect.value === "param" && analysisView.grid) {
+        showField(analysisView.verts, analysisView.faces, analysisView.grid);
+        statsEl.textContent = "MIQ · 顶点 " + analysisView.verts.length +
+          " · 四边单元 " + analysisView.grid.cells;
+        return;
+      }
+      viewSelect.value = "cross";
+      syncAnalysisChrome();
+      drawCrossAnalysis(analysisView);
+    }
+
+    function showField(verts, faces, grid) {
+      const root = new THREE.Group();
+      root.add(buildSmoothSurface(verts, faces, quadMaterial));
+      if (grid.positions.length) root.add(makeLines(grid.positions, quadLineMaterial));
+      if (currentRoot) {
+        scene.remove(currentRoot);
+        disposeRoot(currentRoot);
+      }
+      currentRoot = root;
+      scene.add(currentRoot);
+      applyVisibility();
+    }
+
+    const ALGO_LABEL = { naive: "朴素合并", miq: "MIQ", quadcover: "QuadCover" };
+    let loadToken = 0;
+    let meshCache = null;
+    let fieldCache = null;
+    let activeWorker = null;
+    let activeRun = null;
+
+    function setBusy(busy) {
+      modelSelect.disabled = busy;
+      algoSelect.disabled = busy;
+      gridDiv.disabled = busy;
+      stopButton.hidden = !busy;
+    }
+
+    function groupIndices(flat, stride) {
+      const faces = [];
+      for (let i = 0; i + stride <= flat.length; i += stride) {
+        const face = [];
+        for (let k = 0; k < stride; k++) face.push(flat[i + k]);
+        faces.push(face);
+      }
+      return faces;
+    }
+
+    function uvPairs(flat, count) {
+      const uv = new Array(count);
+      for (let i = 0; i < count; i++) uv[i] = [flat[i * 2], flat[i * 2 + 1]];
+      return uv;
+    }
+
+    function cornerPairs(flat, nFaces) {
+      if (!flat || flat.length < nFaces * 6) return null;
+      const corners = new Array(nFaces);
+      for (let fi = 0; fi < nFaces; fi++) {
+        const base = fi * 6;
+        corners[fi] = [
+          [flat[base], flat[base + 1]],
+          [flat[base + 2], flat[base + 3]],
+          [flat[base + 4], flat[base + 5]]
+        ];
+      }
+      return corners;
+    }
+
+    function runInWorker(algo, verts, faces) {
+      const positions = new Float64Array(verts.length * 3);
+      const faceIdx = new Int32Array(faces.length * 3);
+      for (let i = 0; i < verts.length; i++) {
+        positions[i * 3] = verts[i][0];
+        positions[i * 3 + 1] = verts[i][1];
+        positions[i * 3 + 2] = verts[i][2];
+      }
+      for (let i = 0; i < faces.length; i++) {
+        faceIdx[i * 3] = faces[i][0];
+        faceIdx[i * 3 + 1] = faces[i][1];
+        faceIdx[i * 3 + 2] = faces[i][2];
+      }
+      return new Promise(function (resolve, reject) {
+        const worker = new Worker("assets/js/quad_mesh_worker.js");
+        activeWorker = worker;
+        let settled = false;
+        function finish(fn, value) {
+          if (settled) return;
+          settled = true;
+          worker.terminate();
+          if (activeWorker === worker) activeWorker = null;
+          activeRun = null;
+          worker.onmessage = null;
+          worker.onerror = null;
+          fn(value);
+        }
+        activeRun = {
+          stop: function () { finish(resolve, { stopped: true }); }
+        };
+        worker.onmessage = function (event) {
+          const msg = event.data;
+          if (!msg) return;
+          if (msg.type === "plan") showPlan(msg.names);
+          else if (msg.type === "progress") markProgress(msg.done, msg.total);
+          else if (msg.type === "preview" && msg.kind === "cross") {
+            analysisView = {
+              verts: verts,
+              faces: faces,
+              dirs: msg.dirs,
+              edges: msg.edges,
+              singulars: msg.singulars,
+              grid: null
+            };
+            viewSelect.value = "cross";
+            renderAnalysis();
+          }
+          else if (msg.type === "stage") markStage(msg.index, msg.state, msg.ms);
+          else if (msg.type === "result") finish(resolve, msg);
+          else if (msg.type === "error") finish(reject, new Error(msg.message || "求解失败"));
+        };
+        worker.onerror = function (event) {
+          finish(reject, new Error(event.message || "求解线程出错"));
+        };
+        worker.postMessage({
+          type: "run",
+          algo: algo,
+          positions: positions,
+          faces: faceIdx,
+          nVerts: verts.length,
+          nFaces: faces.length
+        }, [positions.buffer, faceIdx.buffer]);
+      });
+    }
+
+    function requestStop() {
+      loadToken += 1;
+      if (activeWorker) {
+        activeWorker.terminate();
+        activeWorker = null;
+      }
+      if (activeRun) activeRun.stop();
+      markStopped();
+      statsEl.textContent = (ALGO_LABEL[algoSelect.value] || "") + " 已停止";
+      setBusy(false);
+    }
+
+    async function runSelected() {
+      const token = ++loadToken;
+      if (activeWorker) {
+        activeWorker.terminate();
+        activeWorker = null;
+      }
+      if (activeRun) activeRun.stop();
+      const file = modelSelect.value;
+      const algo = algoSelect.value;
+      densityLabel.hidden = algo === "naive";
+      setBusy(true);
+      try {
+        if (!meshCache || meshCache.file !== file) {
+          statsEl.textContent = "正在加载 " + file + " …";
+          const response = await fetch(MODELS_DIR + "/" + file);
+          if (!response.ok) throw new Error("HTTP " + response.status);
+          const text = await response.text();
+          if (token !== loadToken) return;
+          const parsed = parseOBJ(text);
+          if (!parsed.verts.length || !parsed.faces.length) throw new Error("OBJ 里没有网格");
+          meshCache = { file: file, verts: centerAndScale(parsed.verts), faces: parsed.faces };
+          fieldCache = null;
+        }
+        const mesh = meshCache;
+        if (algo === "naive") {
+          hideAnalysisChrome();
+          statsEl.textContent = "朴素合并…";
+          const merged = await runInWorker("naive", mesh.verts, mesh.faces);
+          if (token !== loadToken || merged.stopped) return;
+          const quads = groupIndices(merged.quads, 4);
+          const leftovers = groupIndices(merged.leftovers, 3);
+          showMerged(mesh.verts, quads, leftovers);
+          statsEl.textContent = "朴素合并 · 顶点 " + mesh.verts.length +
+            " · 四边形 " + quads.length +
+            " · 剩余三角 " + leftovers.length;
+          return;
+        }
+        const divisions = Number(gridDiv.value) || 10;
+        if (!fieldCache || fieldCache.file !== file || fieldCache.algo !== algo) {
+          hideAnalysisChrome();
+          statsEl.textContent = ALGO_LABEL[algo] + " 求解中…";
+          const solved = await runInWorker(algo, mesh.verts, mesh.faces);
+          if (token !== loadToken || solved.stopped) return;
+          fieldCache = {
+            file: file,
+            algo: algo,
+            uv: uvPairs(solved.uv, mesh.verts.length),
+            corners: cornerPairs(solved.corners, mesh.faces.length),
+            stages: collectStages(),
+            analysis: analysisView ? {
+              dirs: analysisView.dirs,
+              edges: analysisView.edges,
+              singulars: analysisView.singulars
+            } : null
+          };
+        } else {
+          showStages(fieldCache.stages);
+          if (fieldCache.analysis) {
+            analysisView = {
+              verts: mesh.verts,
+              faces: mesh.faces,
+              dirs: fieldCache.analysis.dirs,
+              edges: fieldCache.analysis.edges,
+              singulars: fieldCache.analysis.singulars,
+              grid: null
+            };
+          }
+        }
+        const grid = traceGrid(mesh.verts, mesh.faces, fieldCache.uv, fieldCache.corners, divisions);
+        if (token !== loadToken) return;
+        if (analysisView) {
+          analysisView.verts = mesh.verts;
+          analysisView.faces = mesh.faces;
+          analysisView.grid = grid;
+          renderAnalysis();
+          return;
+        }
+        showField(mesh.verts, mesh.faces, grid);
+        statsEl.textContent = ALGO_LABEL[algo] + " · 顶点 " + mesh.verts.length +
+          " · 四边单元 " + grid.cells;
+      } catch (error) {
+        if (token !== loadToken) return;
+        statsEl.textContent = (ALGO_LABEL[algo] || "加载") + "失败：" + (error && error.message ? error.message : error);
+      } finally {
+        if (token === loadToken) setBusy(false);
+      }
+    }
+
+    function showMerged(verts, quads, leftovers) {
+      const root = new THREE.Group();
+      const quadEdges = new Set();
+      for (let i = 0; i < quads.length; i++) {
+        const f = quads[i];
+        for (let k = 0; k < f.length; k++) quadEdges.add(edgeKey(f[k], f[(k + 1) % f.length]));
+      }
+      if (quads.length) {
+        root.add(buildSurface(verts, quads, quadMaterial));
+        root.add(makeLines(boundaryPositions(verts, quads), quadLineMaterial));
+      }
+      if (leftovers.length) {
+        root.add(buildSurface(verts, leftovers, triMaterial));
+        root.add(makeLines(boundaryPositions(verts, leftovers, quadEdges), triLineMaterial));
+      }
+      if (currentRoot) {
+        scene.remove(currentRoot);
+        disposeRoot(currentRoot);
+      }
+      currentRoot = root;
+      scene.add(currentRoot);
+      applyVisibility();
+    }
+
+    for (let i = 0; i < modelFiles.length; i++) {
+      const option = document.createElement("option");
+      option.value = modelFiles[i];
+      option.textContent = modelFiles[i].replace(/\.obj$/i, "");
+      modelSelect.appendChild(option);
+    }
+    const initial = modelFiles.indexOf("torus_F7680.obj");
+    modelSelect.selectedIndex = initial >= 0 ? initial : 0;
+    modelSelect.addEventListener("change", runSelected);
+    algoSelect.addEventListener("change", runSelected);
+    stopButton.addEventListener("click", requestStop);
+    viewSelect.addEventListener("change", renderAnalysis);
+    showDirs.addEventListener("change", renderAnalysis);
+    showJumps.addEventListener("change", renderAnalysis);
+    showSings.addEventListener("change", renderAnalysis);
+    gridDiv.addEventListener("change", function () {
+      if (algoSelect.value !== "naive") runSelected();
+    });
+    showSurface.addEventListener("change", applyVisibility);
+    showWire.addEventListener("change", applyVisibility);
+    window.addEventListener("resize", resize);
+
+    function frame() {
+      requestAnimationFrame(frame);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    resize();
+    runSelected();
+    frame();
+  </script>
+</body>
+</html>
