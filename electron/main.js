@@ -70,6 +70,27 @@ const nativeTools = [
     detail: "本机窗口，自由液面粒子",
     cwd: path.join(repoRoot, "cpp", "Fluid3D"),
     bin: path.join(repoRoot, "cpp", "Fluid3D", "build", "release", "viewer")
+  },
+  {
+    id: "principal-curvature-field",
+    title: "主曲率场",
+    detail: "QuadCover 主曲率，可换模型",
+    cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
+    bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "main")
+  },
+  {
+    id: "quad-meshing",
+    title: "四边形网格",
+    detail: "本机窗口，可换模型，跑朴素合并 / MIQ / QuadCover",
+    cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
+    bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "quad_test")
+  },
+  {
+    id: "simple-param",
+    title: "简单参数化",
+    detail: "本机平面窗口，下拉选择算法；非圆盘先切循环边再展开",
+    cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
+    bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "simple_param")
   }
 ];
 
