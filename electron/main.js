@@ -88,7 +88,7 @@ const nativeTools = [
   {
     id: "simple-param",
     title: "简单参数化",
-    detail: "本机平面窗口，下拉选择算法；非圆盘先切循环边再展开",
+    detail: "本机平面窗口，下拉选择算法；粉红线是切缝，点开模型可改",
     cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
     bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "simple_param")
   }
