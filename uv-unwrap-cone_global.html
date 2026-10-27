@@ -140,6 +140,13 @@
       background: #11192b;
       min-height: 0;
     }
+    .main.model-only {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr;
+    }
+    .main.model-only .uv-panel {
+      display: none;
+    }
     .panel {
       display: flex;
       flex-direction: column;
@@ -398,7 +405,7 @@
       </div>
     </div>
 
-    <div class="main">
+    <div class="main model-only">
       <section class="panel">
         <div class="panel-header">
           <span>3D 模型</span>
@@ -421,10 +428,10 @@
             </div>
           </div>
         </div>
-        <div class="footer-note">左侧显示原始三角网格与自动选择的约束点。</div>
+        <div class="footer-note">显示原始三角网格。点选锥奇异点时占满窗口。</div>
       </section>
 
-      <section class="panel">
+      <section class="panel uv-panel">
         <div class="panel-header">
           <span id="uv-panel-label">UV 网格</span>
           <span>边界归一化到 0..1</span>
@@ -662,6 +669,13 @@
       }
       function initModelOptions() {
         populateSelect(modelSelect, MODEL_CATALOG);
+      }
+
+      function setSplitView(showUv) {
+        const main = document.querySelector(".main");
+        if (!main) return;
+        main.classList.toggle("model-only", !showUv);
+        requestAnimationFrame(resize);
       }
 
       function resize() {
@@ -1276,6 +1290,7 @@
             coneBtn.textContent = '🎯 锥奇异点';
             coneBtn.style.background = '#2a1a3e';
           }
+          setSplitView(!!currentUnwrapUv);
         }
         updateConeDisplay();
         if (currentMeshData) {
@@ -1727,6 +1742,7 @@
         btn.style.background = coneMode ? '#4a2060' : '#2a1a3e';
         controls.enabled = !coneMode;
         modelCanvas.style.cursor = coneMode ? 'crosshair' : '';
+        setSplitView(!coneMode && !!currentUnwrapUv);
       }
 
       function computeBenChenCones(meshData) {
@@ -2347,6 +2363,7 @@
             coneBtn.textContent = '🎯 锥奇异点';
             coneBtn.style.background = '#2a1a3e';
           }
+          setSplitView(false);
           const anchors = chooseAnchorPair(meshData.positions);
 
           const modelVisual = buildModelGroup(root, anchors, meshData.positions, shouldShowPinPoints());
@@ -2485,6 +2502,7 @@
           currentUvPins = uvVisual.pins;
           uvScene.add(currentUvLines);
           if (currentUvPins) uvScene.add(currentUvPins);
+          setSplitView(!coneMode);
 
           let details =
             methodLabel +
