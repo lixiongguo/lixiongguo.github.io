@@ -84,6 +84,14 @@ void Camera::zoom(float delta) {
     update();
 }
 
+glm::mat4 Camera::worldFromClip() const {
+    return world_from_camera * camera_from_clip;
+}
+
+glm::mat4 Camera::clipFromWorld() const {
+    return glm::inverse(camera_from_clip) * glm::inverse(world_from_camera);
+}
+
 void Camera::lookAt(const glm::vec3 &eye, const glm::vec3 &target, float fov) {
     pos = eye;
     fovy = fov;

@@ -14,12 +14,15 @@
 #import <Cocoa/Cocoa.h>
 #import "../../cpp/resource_hud.h"
 
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -43,9 +46,9 @@ enum KeyBit : uint32_t {
 
 enum class ViewMode { Render, Normal };
 
-const char *viewName(ViewMode mode, bool clay) {
-    if (clay) return "白模";
-    return mode == ViewMode::Normal ? "法线" : "焦散";
+const char *viewName(ViewMode mode, bool edit) {
+    if (edit) return "编辑态";
+    return mode == ViewMode::Normal ? "法线" : "渲染态";
 }
 
 struct Json {
@@ -342,6 +345,213 @@ void writePPM(const Film &film, const std::filesystem::path &path, bool reinhard
     }
 }
 
+enum class GizmoPart { None, Translate, Rotate, Scale };
+
+struct GizmoFrame {
+    bool valid = false;
+    int width = 0;
+    int height = 0;
+    glm::vec3 camPos { 0.f };
+    glm::mat4 worldFromClip { 1.f };
+    glm::mat4 clipFromWorld { 1.f };
+    glm::vec3 origin { 0.f };
+    glm::vec3 axis[3] {};
+    float axisLen = 0.3f;
+    glm::vec3 translate { 0.f };
+    glm::vec3 rotate { 0.f };
+    glm::vec3 scale { 1.f };
+    glm::vec2 originPx { 0.f };
+    glm::vec2 tipPx[3] {};
+    bool tipOn[3] {};
+    glm::vec2 ringPx[3][48] {};
+    bool ringOn[3][48] {};
+};
+
+glm::mat4 objectRotation(const glm::vec3 &degrees) {
+    glm::mat4 rotation(1.f);
+    rotation = glm::rotate(rotation, glm::radians(degrees.z), glm::vec3(0.f, 0.f, 1.f));
+    rotation = glm::rotate(rotation, glm::radians(degrees.y), glm::vec3(0.f, 1.f, 0.f));
+    rotation = glm::rotate(rotation, glm::radians(degrees.x), glm::vec3(1.f, 0.f, 0.f));
+    return rotation;
+}
+
+glm::vec3 eulerFromRotation(const glm::mat4 &rotation) {
+    const float sy = glm::clamp(rotation[2][0], -1.f, 1.f);
+    const float ry = std::asin(sy);
+    float rx = 0.f;
+    float rz = 0.f;
+    if (std::abs(sy) < 0.9999f) {
+        rx = std::atan2(-rotation[2][1], rotation[2][2]);
+        rz = std::atan2(-rotation[1][0], rotation[0][0]);
+    } else {
+        rx = std::atan2(rotation[1][2], rotation[1][1]);
+    }
+    return glm::degrees(glm::vec3(rx, ry, rz));
+}
+
+bool projectPoint(const GizmoFrame &frame, const glm::vec3 &world, glm::vec2 &pixel) {
+    const glm::vec4 clip = frame.clipFromWorld * glm::vec4(world, 1.f);
+    if (clip.w <= 1e-4f) return false;
+    const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+    pixel.x = (ndc.x * 0.5f + 0.5f) * static_cast<float>(frame.width);
+    pixel.y = (0.5f - ndc.y * 0.5f) * static_cast<float>(frame.height);
+    return true;
+}
+
+Ray rayFromPixel(const GizmoFrame &frame, const glm::vec2 &pixel) {
+    const float x = pixel.x / static_cast<float>(std::max(frame.width, 1)) * 2.f - 1.f;
+    const float y = (1.f - pixel.y / static_cast<float>(std::max(frame.height, 1))) * 2.f - 1.f;
+    const glm::vec4 world = frame.worldFromClip * glm::vec4(x, y, 0.f, 1.f);
+    const glm::vec3 point = glm::vec3(world) / world.w;
+    return { frame.camPos, glm::normalize(point - frame.camPos) };
+}
+
+bool axisClosest(const glm::vec3 &origin, const glm::vec3 &axis, const Ray &ray, float &t) {
+    const glm::vec3 gap = origin - ray.origin;
+    const float b = glm::dot(axis, ray.direction);
+    const float c = glm::dot(ray.direction, ray.direction);
+    const float d = glm::dot(axis, gap);
+    const float e = glm::dot(ray.direction, gap);
+    const float denom = c - b * b;
+    if (std::abs(denom) < 1e-6f) return false;
+    t = (b * e - c * d) / denom;
+    return true;
+}
+
+bool planeHit(const glm::vec3 &origin, const glm::vec3 &normal, const Ray &ray, glm::vec3 &hit) {
+    const float denom = glm::dot(ray.direction, normal);
+    if (std::abs(denom) < 1e-5f) return false;
+    const float t = glm::dot(origin - ray.origin, normal) / denom;
+    if (t <= 0.f) return false;
+    hit = ray.origin + ray.direction * t;
+    return true;
+}
+
+float signedAngle(const glm::vec3 &axis, const glm::vec3 &from, const glm::vec3 &to) {
+    return std::atan2(glm::dot(axis, glm::cross(from, to)), glm::dot(from, to));
+}
+
+float segmentDistance(const glm::vec2 &point, const glm::vec2 &a, const glm::vec2 &b) {
+    const glm::vec2 edge = b - a;
+    const float length2 = glm::dot(edge, edge);
+    if (length2 < 1e-6f) return glm::length(point - a);
+    const float h = glm::clamp(glm::dot(point - a, edge) / length2, 0.f, 1.f);
+    return glm::length(point - (a + edge * h));
+}
+
+bool hitGizmo(const GizmoFrame &frame, const glm::vec2 &pixel, GizmoPart &part, int &axis) {
+    part = GizmoPart::None;
+    axis = -1;
+    if (!frame.valid) return false;
+    float best = 1e9f;
+    for (int i = 0; i < 3; ++i) {
+        for (int k = 0; k < 48; ++k) {
+            if (!frame.ringOn[i][k] || !frame.ringOn[i][(k + 1) % 48]) continue;
+            const float distance = segmentDistance(pixel, frame.ringPx[i][k], frame.ringPx[i][(k + 1) % 48]);
+            if (distance < 7.f && distance < best) {
+                best = distance;
+                part = GizmoPart::Rotate;
+                axis = i;
+            }
+        }
+    }
+    for (int i = 0; i < 3; ++i) {
+        if (!frame.tipOn[i]) continue;
+        const glm::vec2 end = frame.originPx + (frame.tipPx[i] - frame.originPx) * 0.82f;
+        const float distance = segmentDistance(pixel, frame.originPx, end);
+        if (distance < 7.f && distance < best) {
+            best = distance;
+            part = GizmoPart::Translate;
+            axis = i;
+        }
+    }
+    for (int i = 0; i < 3; ++i) {
+        if (!frame.tipOn[i]) continue;
+        const float distance = glm::length(pixel - frame.tipPx[i]);
+        if (distance < 11.f && distance < best) {
+            best = distance;
+            part = GizmoPart::Scale;
+            axis = i;
+        }
+    }
+    return part != GizmoPart::None;
+}
+
+void paint(std::vector<uint8_t> &pixels, int width, int height, int x, int y, glm::ivec3 color) {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const size_t index = (static_cast<size_t>(y) * width + x) * 4;
+    pixels[index + 0] = static_cast<uint8_t>(color.r);
+    pixels[index + 1] = static_cast<uint8_t>(color.g);
+    pixels[index + 2] = static_cast<uint8_t>(color.b);
+}
+
+void paintDot(std::vector<uint8_t> &pixels, int width, int height, int x, int y, glm::ivec3 color) {
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            if (dx * dx + dy * dy > 2) continue;
+            paint(pixels, width, height, x + dx, y + dy, color);
+        }
+    }
+}
+
+void paintLine(std::vector<uint8_t> &pixels, int width, int height, glm::vec2 a, glm::vec2 b, glm::ivec3 color) {
+    int x0 = static_cast<int>(std::lround(a.x));
+    int y0 = static_cast<int>(std::lround(a.y));
+    const int x1 = static_cast<int>(std::lround(b.x));
+    const int y1 = static_cast<int>(std::lround(b.y));
+    const int dx = std::abs(x1 - x0);
+    const int dy = -std::abs(y1 - y0);
+    const int sx = x0 < x1 ? 1 : -1;
+    const int sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy;
+    for (;;) {
+        paintDot(pixels, width, height, x0, y0, color);
+        if (x0 == x1 && y0 == y1) break;
+        const int e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 += sx; }
+        if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+}
+
+void drawGizmo(std::vector<uint8_t> &pixels, int width, int height, const GizmoFrame &frame, int activeAxis) {
+    if (!frame.valid || width <= 0 || height <= 0) return;
+    const glm::ivec3 colors[3] = { { 235, 70, 60 }, { 70, 210, 80 }, { 70, 130, 245 } };
+    const glm::ivec3 hot { 255, 220, 70 };
+    for (int i = 0; i < 3; ++i) {
+        const glm::ivec3 color = i == activeAxis ? hot : colors[i];
+        for (int k = 0; k < 48; ++k) {
+            if (!frame.ringOn[i][k] || !frame.ringOn[i][(k + 1) % 48]) continue;
+            paintLine(pixels, width, height, frame.ringPx[i][k], frame.ringPx[i][(k + 1) % 48], color);
+        }
+    }
+    for (int i = 0; i < 3; ++i) {
+        if (!frame.tipOn[i]) continue;
+        const glm::ivec3 color = i == activeAxis ? hot : colors[i];
+        const glm::vec2 shaft = frame.originPx + (frame.tipPx[i] - frame.originPx) * 0.82f;
+        paintLine(pixels, width, height, frame.originPx, shaft, color);
+        const int cx = static_cast<int>(std::lround(frame.tipPx[i].x));
+        const int cy = static_cast<int>(std::lround(frame.tipPx[i].y));
+        for (int y = cy - 4; y <= cy + 4; ++y) {
+            for (int x = cx - 4; x <= cx + 4; ++x) paint(pixels, width, height, x, y, color);
+        }
+    }
+    const int ox = static_cast<int>(std::lround(frame.originPx.x));
+    const int oy = static_cast<int>(std::lround(frame.originPx.y));
+    for (int y = oy - 2; y <= oy + 2; ++y) {
+        for (int x = ox - 2; x <= ox + 2; ++x) paint(pixels, width, height, x, y, { 245, 245, 245 });
+    }
+}
+
+std::string formatTrs(const glm::vec3 &translate, const glm::vec3 &rotate, const glm::vec3 &scale) {
+    char buffer[256];
+    std::snprintf(buffer, sizeof(buffer),
+        "平移 %.3f %.3f %.3f    旋转 %.1f %.1f %.1f    缩放 %.3f %.3f %.3f",
+        translate.x, translate.y, translate.z,
+        rotate.x, rotate.y, rotate.z,
+        scale.x, scale.y, scale.z);
+    return buffer;
+}
+
 struct AppState {
     AppState(int w, int h, const SceneDesc &desc, std::vector<Triangle> triangles)
         : lens(std::make_unique<Model>(std::move(triangles))),
@@ -436,6 +646,259 @@ struct AppState {
             return;
         }
         applyMesh(entry, std::move(triangles));
+    }
+
+    void captureGizmo(GizmoFrame &frame) const {
+        frame = {};
+        frame.width = static_cast<int>(film.getWidth());
+        frame.height = static_cast<int>(film.getHeight());
+        frame.camPos = camera.eye();
+        frame.worldFromClip = camera.worldFromClip();
+        frame.clipFromWorld = camera.clipFromWorld();
+        frame.origin = meshTranslate;
+        frame.translate = meshTranslate;
+        frame.rotate = meshRotate;
+        frame.scale = meshScale;
+        if (!projectPoint(frame, frame.origin, frame.originPx)) return;
+        const glm::mat4 rotation = objectRotation(meshRotate);
+        glm::vec3 view = frame.origin - frame.camPos;
+        if (glm::dot(view, view) < 1e-8f) return;
+        view = glm::normalize(view);
+        const glm::vec3 side = glm::normalize(glm::cross(
+            view, std::abs(view.y) < 0.9f ? glm::vec3(0.f, 1.f, 0.f) : glm::vec3(1.f, 0.f, 0.f)));
+        glm::vec2 sidePx;
+        const float probe = 0.25f;
+        if (!projectPoint(frame, frame.origin + side * probe, sidePx)) return;
+        const float pixelsPerUnit = glm::length(sidePx - frame.originPx) / probe;
+        if (pixelsPerUnit < 1e-3f) return;
+        frame.axisLen = 110.f / pixelsPerUnit;
+        for (int i = 0; i < 3; ++i) {
+            glm::vec3 local(0.f);
+            local[i] = 1.f;
+            frame.axis[i] = glm::normalize(glm::vec3(rotation * glm::vec4(local, 0.f)));
+            frame.tipOn[i] = projectPoint(frame, frame.origin + frame.axis[i] * frame.axisLen, frame.tipPx[i]);
+            const glm::vec3 u = frame.axis[(i + 1) % 3];
+            const glm::vec3 v = frame.axis[(i + 2) % 3];
+            const float radius = frame.axisLen * 0.62f;
+            for (int k = 0; k < 48; ++k) {
+                const float angle = static_cast<float>(k) / 48.f * 6.2831853f;
+                const glm::vec3 point = frame.origin + (std::cos(angle) * u + std::sin(angle) * v) * radius;
+                frame.ringOn[i][k] = projectPoint(frame, point, frame.ringPx[i][k]);
+            }
+        }
+        frame.valid = true;
+    }
+
+    void rememberTransform() {
+        MeshEntry *slot = nullptr;
+        for (auto &entry : catalog) {
+            if (entry.name == currentModel) slot = &entry;
+        }
+        if (!slot) {
+            MeshEntry added = fallback;
+            added.name = currentModel;
+            added.path = modelsDir / currentModel;
+            added.note = fileNote;
+            catalog.push_back(std::move(added));
+            slot = &catalog.back();
+        }
+        slot->translate = meshTranslate;
+        slot->rotate = meshRotate;
+        slot->scale = meshScale;
+    }
+
+    void writeSceneJson() {
+        if (sceneJson.empty()) return;
+        auto number = [](float value) {
+            char buffer[32];
+            std::snprintf(buffer, sizeof(buffer), "%.4f", value);
+            return std::string(buffer);
+        };
+        auto vec = [&](const glm::vec3 &value) {
+            return "[" + number(value.x) + ", " + number(value.y) + ", " + number(value.z) + "]";
+        };
+        auto escaped = [](const std::string &text) {
+            std::string out;
+            for (char c : text) {
+                if (c == '\\' || c == '"') out.push_back('\\');
+                if (c == '\n') { out += "\\n"; continue; }
+                out.push_back(c);
+            }
+            return out;
+        };
+        std::ostringstream out;
+        out << "{\n";
+        out << "  \"note\": \"" << escaped(fileNote) << "\",\n";
+        out << "  \"camera\": { \"eye\": " << vec(fallback.eye)
+            << ", \"target\": " << vec(fallback.target)
+            << ", \"fovDeg\": " << number(fallback.fov) << " },\n";
+        out << "  \"beam\": {\n";
+        out << "    \"direction\": " << vec(fallback.beamDir) << ",\n";
+        out << "    \"origin\": " << vec(fallback.beamOrigin) << ",\n";
+        out << "    \"halfExtent\": [" << number(fallback.beamHalf.x) << ", " << number(fallback.beamHalf.y) << "],\n";
+        out << "    \"rays\": " << fallback.beamRays << ",\n";
+        out << "    \"marker\": { \"point\": " << vec(fallback.beamPoint)
+            << ", \"normal\": " << vec(fallback.beamNormal)
+            << ", \"radius\": " << number(fallback.beamRadius)
+            << ", \"albedo\": " << vec(fallback.beamAlbedo) << " }\n";
+        out << "  },\n";
+        out << "  \"receiver\": {\n";
+        out << "    \"point\": " << vec(fallback.wallPoint) << ",\n";
+        out << "    \"normal\": " << vec(fallback.wallNormal) << ",\n";
+        out << "    \"radius\": " << number(fallback.wallRadius) << ",\n";
+        out << "    \"albedo\": " << vec(fallback.wallAlbedo) << ",\n";
+        out << "    \"mapHalf\": " << number(fallback.mapHalf) << ",\n";
+        out << "    \"bins\": " << fallback.bins << "\n";
+        out << "  },\n";
+        out << "  \"defaults\": {\n";
+        out << "    \"material\": { \"type\": \"dielectric\", \"albedo\": " << vec(fallback.albedo)
+            << ", \"rough\": " << number(fallback.rough) << ", \"eta\": " << number(fallback.eta) << " },\n";
+        out << "    \"transform\": { \"scale\": " << vec(fallback.scale)
+            << ", \"rotateDeg\": " << vec(fallback.rotate)
+            << ", \"translate\": " << vec(fallback.translate) << " }\n";
+        out << "  },\n";
+        out << "  \"meshes\": [\n";
+        for (size_t i = 0; i < catalog.size(); ++i) {
+            const MeshEntry &entry = catalog[i];
+            out << "    {\n";
+            out << "      \"path\": \"Models/" << entry.name << "\",\n";
+            out << "      \"triMax\": " << entry.triMax << ",\n";
+            out << "      \"material\": { \"type\": \"dielectric\", \"albedo\": " << vec(entry.albedo)
+                << ", \"rough\": " << number(entry.rough) << ", \"eta\": " << number(entry.eta) << " },\n";
+            out << "      \"transform\": { \"scale\": " << vec(entry.scale)
+                << ", \"rotateDeg\": " << vec(entry.rotate)
+                << ", \"translate\": " << vec(entry.translate) << " }\n";
+            out << "    }" << (i + 1 == catalog.size() ? "\n" : ",\n");
+        }
+        out << "  ]\n}\n";
+        const std::filesystem::path temporary = sceneJson.string() + ".tmp";
+        {
+            std::ofstream file(temporary);
+            if (!file) return;
+            file << out.str();
+        }
+        std::filesystem::rename(temporary, sceneJson);
+    }
+
+    void consumeGizmoEdit() {
+        bool apply = false;
+        bool save = false;
+        glm::vec3 translate;
+        glm::vec3 rotate;
+        glm::vec3 scale;
+        {
+            std::lock_guard<std::mutex> lock(inputMutex);
+            apply = gizmoApply;
+            save = gizmoSave;
+            translate = gizmoTranslate;
+            rotate = gizmoRotate;
+            scale = gizmoScale;
+            gizmoApply = gizmoSave = false;
+        }
+        if (!apply && !save) return;
+        if (apply) {
+            meshTranslate = translate;
+            meshRotate = rotate;
+            meshScale = scale;
+            rememberTransform();
+            mountLens();
+        }
+        if (save) writeSceneJson();
+        std::lock_guard<std::mutex> lock(inputMutex);
+        note = formatTrs(meshTranslate, meshRotate, meshScale);
+        if (save) note += "    已写入场景 JSON";
+    }
+
+    bool beginGizmo(const glm::vec2 &pixel) {
+        GizmoFrame frame;
+        {
+            std::lock_guard<std::mutex> lock(imageMutex);
+            frame = gizmoFrame;
+        }
+        {
+            std::lock_guard<std::mutex> lock(inputMutex);
+            if (!editMode) return false;
+        }
+        GizmoPart part = GizmoPart::None;
+        int axis = -1;
+        if (!hitGizmo(frame, pixel, part, axis)) return false;
+        const Ray ray = rayFromPixel(frame, pixel);
+        float param = frame.axisLen;
+        axisClosest(frame.origin, frame.axis[axis], ray, param);
+        glm::vec3 hit = frame.origin;
+        if (part == GizmoPart::Rotate && !planeHit(frame.origin, frame.axis[axis], ray, hit)) return false;
+        if (part != GizmoPart::Rotate) planeHit(frame.origin, frame.axis[axis], ray, hit);
+        std::lock_guard<std::mutex> lock(inputMutex);
+        gizmoDragging = true;
+        gizmoPart = part;
+        gizmoAxis = axis;
+        grabFrame = frame;
+        grabPixel = pixel;
+        grabParam = param;
+        grabHit = hit;
+        grabTranslate = frame.translate;
+        grabRotate = frame.rotate;
+        grabScale = frame.scale;
+        gizmoTranslate = frame.translate;
+        gizmoRotate = frame.rotate;
+        gizmoScale = frame.scale;
+        return true;
+    }
+
+    void dragGizmo(const glm::vec2 &pixel) {
+        GizmoPart part;
+        int axis;
+        GizmoFrame frame;
+        glm::vec3 translate;
+        glm::vec3 rotate;
+        glm::vec3 scale;
+        float param0;
+        glm::vec3 hit0;
+        {
+            std::lock_guard<std::mutex> lock(inputMutex);
+            if (!gizmoDragging) return;
+            part = gizmoPart;
+            axis = gizmoAxis;
+            frame = grabFrame;
+            translate = grabTranslate;
+            rotate = grabRotate;
+            scale = grabScale;
+            param0 = grabParam;
+            hit0 = grabHit;
+        }
+        const Ray ray = rayFromPixel(frame, pixel);
+        if (part == GizmoPart::Translate) {
+            float param = param0;
+            if (!axisClosest(frame.origin, frame.axis[axis], ray, param)) return;
+            translate = frame.origin + frame.axis[axis] * (param - param0);
+        } else if (part == GizmoPart::Rotate) {
+            glm::vec3 hit;
+            if (!planeHit(frame.origin, frame.axis[axis], ray, hit)) return;
+            glm::vec3 local(0.f);
+            local[axis] = 1.f;
+            const float angle = signedAngle(frame.axis[axis], hit0 - frame.origin, hit - frame.origin);
+            const glm::mat4 turned = objectRotation(rotate) * glm::rotate(glm::mat4(1.f), angle, local);
+            rotate = eulerFromRotation(turned);
+        } else if (part == GizmoPart::Scale) {
+            float param = param0;
+            if (!axisClosest(frame.origin, frame.axis[axis], ray, param)) return;
+            if (std::abs(param0) < 1e-4f) return;
+            scale[axis] = glm::clamp(scale[axis] * (param / param0), 0.02f, 80.f);
+        }
+        std::lock_guard<std::mutex> lock(inputMutex);
+        gizmoTranslate = translate;
+        gizmoRotate = rotate;
+        gizmoScale = scale;
+        gizmoApply = true;
+        note = formatTrs(translate, rotate, scale);
+    }
+
+    void endGizmo() {
+        std::lock_guard<std::mutex> lock(inputMutex);
+        if (!gizmoDragging) return;
+        gizmoDragging = false;
+        gizmoApply = true;
+        gizmoSave = true;
     }
 
     void resize(int w, int h) {
@@ -558,7 +1021,7 @@ struct AppState {
             newH = pendingH;
             pendingW = pendingH = 0;
             mode = view;
-            clay = whiteModel;
+            clay = editMode;
         }
 
         bool moved = false;
@@ -598,6 +1061,7 @@ struct AppState {
         lastTick = now;
         if (dt > 0.2f) dt = 0.2f;
         consumePendingModel();
+        consumeGizmoEdit();
 
         const int epoch = inputEpoch.load();
         const int clayEpochAtStart = clayEpoch.load();
@@ -608,7 +1072,7 @@ struct AppState {
         {
             std::lock_guard<std::mutex> lock(inputMutex);
             mode = view;
-            clay = whiteModel;
+            clay = editMode;
             batch = sppBatch;
         }
         if (clay) batch = 1;
@@ -646,6 +1110,8 @@ struct AppState {
 
         std::vector<uint8_t> pixels;
         writeRGBA(film, pixels, reinhard);
+        GizmoFrame frame;
+        if (clay) captureGizmo(frame);
 
         std::string caption;
         {
@@ -654,6 +1120,7 @@ struct AppState {
         }
         std::lock_guard<std::mutex> lock(imageMutex);
         rgba.swap(pixels);
+        gizmoFrame = frame;
         shownW = static_cast<int>(film.getWidth());
         shownH = static_cast<int>(film.getHeight());
         shownSpp = spp;
@@ -665,6 +1132,8 @@ struct AppState {
 
     std::unique_ptr<Model> lens;
     std::filesystem::path modelsDir;
+    std::filesystem::path sceneJson;
+    std::string fileNote;
     std::vector<std::string> modelNames;
     std::vector<MeshEntry> catalog;
     MeshEntry fallback;
@@ -708,7 +1177,22 @@ struct AppState {
     bool save = false;
     int pendingW = 0, pendingH = 0;
     int sppBatch = 1;
-    bool whiteModel = false;
+    bool editMode = false;
+    bool gizmoDragging = false;
+    bool gizmoApply = false;
+    bool gizmoSave = false;
+    GizmoPart gizmoPart = GizmoPart::None;
+    int gizmoAxis = -1;
+    GizmoFrame grabFrame;
+    glm::vec2 grabPixel { 0.f };
+    float grabParam = 0.f;
+    glm::vec3 grabHit { 0.f };
+    glm::vec3 grabTranslate { 0.f };
+    glm::vec3 grabRotate { 0.f };
+    glm::vec3 grabScale { 1.f };
+    glm::vec3 gizmoTranslate { 0.f };
+    glm::vec3 gizmoRotate { 0.f };
+    glm::vec3 gizmoScale { 1.f };
     ViewMode view = ViewMode::Render;
     std::string note;
     std::string sceneNote;
@@ -717,6 +1201,7 @@ struct AppState {
 
     std::mutex imageMutex;
     std::vector<uint8_t> rgba;
+    GizmoFrame gizmoFrame;
     int shownW = 0, shownH = 0, shownSpp = 0, shownBatch = 1;
     ViewMode shownView = ViewMode::Render;
     bool shownClay = false;
@@ -759,6 +1244,7 @@ NSImage *imageFromRGBA(const std::vector<uint8_t> &rgba, int w, int h) {
     NSSwitch *claySwitch;
     NSPopUpButton *modelPopup;
     BOOL scheduled;
+    BOOL gizmoMiss;
 }
 
 - (instancetype)initWithState:(std::shared_ptr<AppState>)appState {
@@ -766,7 +1252,7 @@ NSImage *imageFromRGBA(const std::vector<uint8_t> &rgba, int w, int h) {
     if (!self) return nil;
     state = std::move(appState);
 
-    caption = [self makeCaption:@"焦散"];
+    caption = [self makeCaption:@"渲染态"];
     imageView = [self makeImageView];
     NSStackView *column = [self column:caption image:imageView];
 
@@ -790,8 +1276,10 @@ NSImage *imageFromRGBA(const std::vector<uint8_t> &rgba, int w, int h) {
     [modelRow addArrangedSubview:modelLabel];
     [modelRow addArrangedSubview:modelPopup];
 
-    NSTextField *clayLabel = [self makeCaption:@"白模"];
-    clayLabel.font = [NSFont systemFontOfSize:13];
+    NSTextField *renderLabel = [self makeCaption:@"渲染态"];
+    renderLabel.font = [NSFont systemFontOfSize:13];
+    NSTextField *editLabel = [self makeCaption:@"编辑态"];
+    editLabel.font = [NSFont systemFontOfSize:13];
     claySwitch = [[NSSwitch alloc] init];
     claySwitch.target = self;
     claySwitch.action = @selector(claySwitchChanged:);
@@ -800,8 +1288,9 @@ NSImage *imageFromRGBA(const std::vector<uint8_t> &rgba, int w, int h) {
     clayRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     clayRow.spacing = 8;
     clayRow.alignment = NSLayoutAttributeCenterY;
-    [clayRow addArrangedSubview:clayLabel];
+    [clayRow addArrangedSubview:renderLabel];
     [clayRow addArrangedSubview:claySwitch];
+    [clayRow addArrangedSubview:editLabel];
 
     status = [[NSTextField alloc] init];
     status.editable = NO;
@@ -909,6 +1398,8 @@ NSImage *imageFromRGBA(const std::vector<uint8_t> &rgba, int w, int h) {
     ViewMode mode = ViewMode::Render;
     bool clay = false;
     std::string note;
+    GizmoFrame gizmo;
+    int activeAxis = -1;
     {
         std::lock_guard<std::mutex> lock(state->imageMutex);
         pixels = state->rgba;
@@ -919,15 +1410,24 @@ NSImage *imageFromRGBA(const std::vector<uint8_t> &rgba, int w, int h) {
         mode = state->shownView;
         clay = state->shownClay;
         note = state->shownNote;
+        gizmo = state->gizmoFrame;
     }
+    if (state->gizmoDragging) activeAxis = state->gizmoAxis;
+    if (clay) drawGizmo(pixels, w, h, gizmo, activeAxis);
     imageView.image = imageFromRGBA(pixels, w, h);
-    caption.stringValue = clay ? @"白模" : (mode == ViewMode::Normal ? @"法线" : @"焦散");
+    caption.stringValue = clay ? @"编辑态" : (mode == ViewMode::Normal ? @"法线" : @"渲染态");
 
     NSString *extra = note.empty() ? @"" : [NSString stringWithFormat:@"    %@", [NSString stringWithUTF8String:note.c_str()]];
-    status.stringValue = [NSString stringWithFormat:
-        @"spp %d    每轮 %d    %dx%d    %s%@\n拖拽旋转   WASD 移动   空格/Shift 升降   滚轮变焦   白模开关只看几何   V 法线   1/2/3 分辨率   -/= 每轮采样   R 重置   P 保存   Esc 退出",
-        spp, batch, w, h, viewName(mode, clay), extra];
-    self.window.title = [NSString stringWithFormat:@"焦散透镜  spp %d", spp];
+    if (clay) {
+        status.stringValue = [NSString stringWithFormat:
+            @"编辑态%@\n拖箭头平移，拖圆环旋转，拖端点方块缩放。空白处拖拽转相机   WASD 移动   滚轮变焦   松开后写入场景 JSON",
+            extra];
+    } else {
+        status.stringValue = [NSString stringWithFormat:
+            @"spp %d    每轮 %d    %dx%d    %s%@\n拖拽旋转   WASD 移动   空格/Shift 升降   滚轮变焦   开关切到编辑态   V 法线   1/2/3 分辨率   -/= 每轮采样   R 重置   P 保存   Esc 退出",
+            spp, batch, w, h, viewName(mode, clay), extra];
+    }
+    self.window.title = clay ? @"焦散透镜  编辑态" : [NSString stringWithFormat:@"焦散透镜  spp %d", spp];
 }
 
 - (void)wake {
@@ -952,9 +1452,11 @@ NSImage *imageFromRGBA(const std::vector<uint8_t> &rgba, int w, int h) {
 - (void)claySwitchChanged:(NSSwitch *)sender {
     {
         std::lock_guard<std::mutex> lock(state->inputMutex);
-        state->whiteModel = sender.state == NSControlStateValueOn;
+        state->editMode = sender.state == NSControlStateValueOn;
         state->reset = true;
-        state->note = state->whiteModel ? "白模：只显示几何，不追踪光线" : state->sceneNote;
+        state->note = state->editMode
+            ? formatTrs(state->meshTranslate, state->meshRotate, state->meshScale)
+            : state->sceneNote;
     }
     state->clayEpoch.fetch_add(1);
     [self wake];
@@ -993,6 +1495,7 @@ NSImage *imageFromRGBA(const std::vector<uint8_t> &rgba, int w, int h) {
     }
     if ([ch isEqualToString:@"v"] && !event.isARepeat) {
         std::lock_guard<std::mutex> lock(state->inputMutex);
+        if (state->editMode) return;
         state->view = state->view == ViewMode::Render ? ViewMode::Normal : ViewMode::Render;
         state->reset = true;
         state->note.clear();
@@ -1042,7 +1545,46 @@ NSImage *imageFromRGBA(const std::vector<uint8_t> &rgba, int w, int h) {
     else if (event.keyCode == 56 || event.keyCode == 60 || event.keyCode == 125) [self setHeld:KeyDown down:NO];
 }
 
+- (BOOL)filmPixel:(NSEvent *)event pixel:(glm::vec2 &)pixel clamp:(BOOL)clamp {
+    NSPoint local = [imageView convertPoint:event.locationInWindow fromView:nil];
+    const NSRect bounds = imageView.bounds;
+    int width = 0;
+    int height = 0;
+    {
+        std::lock_guard<std::mutex> lock(state->imageMutex);
+        width = state->shownW;
+        height = state->shownH;
+    }
+    if (width < 1 || height < 1 || bounds.size.width < 1 || bounds.size.height < 1) return NO;
+    if (!clamp && !NSPointInRect(local, bounds)) return NO;
+    const float x = glm::clamp(static_cast<float>(local.x / bounds.size.width), 0.f, 1.f);
+    const float y = glm::clamp(static_cast<float>(1.f - local.y / bounds.size.height), 0.f, 1.f);
+    pixel = { x * width, y * height };
+    return YES;
+}
+
+- (void)mouseDown:(NSEvent *)event {
+    glm::vec2 pixel;
+    if ([self filmPixel:event pixel:pixel clamp:NO] && state->beginGizmo(pixel)) return;
+    gizmoMiss = YES;
+}
+
+- (void)mouseUp:(NSEvent *)event {
+    if (state->gizmoDragging) {
+        state->endGizmo();
+        [self wake];
+    }
+    gizmoMiss = NO;
+}
+
 - (void)mouseDragged:(NSEvent *)event {
+    if (state->gizmoDragging) {
+        glm::vec2 pixel;
+        if ([self filmPixel:event pixel:pixel clamp:YES]) state->dragGizmo(pixel);
+        [self wake];
+        return;
+    }
+    if (!gizmoMiss) return;
     std::lock_guard<std::mutex> lock(state->inputMutex);
     state->turnX += event.deltaX;
     state->turnY += event.deltaY;
@@ -1253,6 +1795,8 @@ int main(int argc, char **argv) {
         auto state = std::make_shared<AppState>(360, 270, desc, std::move(triangles));
         state->catalog = std::move(desc.catalog);
         state->fallback = std::move(desc.fallback);
+        state->sceneJson = scenePath;
+        state->fileNote = desc.note;
         state->modelsDir = findModelsDir(scenePath);
         state->modelNames = listObjModels(state->modelsDir);
         if (dump) {

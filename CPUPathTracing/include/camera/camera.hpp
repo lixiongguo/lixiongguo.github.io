@@ -25,6 +25,9 @@ public:
     void turn(const glm::vec2 &delta);
     void zoom(float delta);
     void lookAt(const glm::vec3 &eye, const glm::vec3 &target, float fov);
+    glm::vec3 eye() const { return pos; }
+    glm::mat4 clipFromWorld() const;
+    glm::mat4 worldFromClip() const;
 
     void print();
 private:
