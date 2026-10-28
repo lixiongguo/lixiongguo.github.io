@@ -84,6 +84,19 @@ void Camera::zoom(float delta) {
     update();
 }
 
+void Camera::lookAt(const glm::vec3 &eye, const glm::vec3 &target, float fov) {
+    pos = eye;
+    fovy = fov;
+    view_direction = glm::normalize(target - pos);
+    update();
+    theta = glm::degrees(glm::acos(glm::clamp(view_direction.y, -1.f, 1.f)));
+    if (glm::abs(view_direction.y) == 1.f) {
+        phi = 0;
+    } else {
+        phi = glm::degrees(std::atan2(view_direction.z, view_direction.x));
+    }
+}
+
 void Camera::print() {
     auto viewpoint = pos + view_direction;
     printf("Camera:\n");

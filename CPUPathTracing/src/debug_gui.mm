@@ -176,6 +176,36 @@ struct JsonParser {
     size_t i = 0;
 };
 
+struct MeshEntry {
+    std::string name;
+    std::filesystem::path path;
+    int triMax = 0;
+    glm::vec3 scale { 1.f };
+    glm::vec3 rotate { 0.f };
+    glm::vec3 translate { 0.f };
+    float eta = 1.55f;
+    float rough = 0.f;
+    glm::vec3 albedo { 0.98f };
+    glm::vec3 eye { 0.f };
+    glm::vec3 target { 0.f, 0.f, -1.f };
+    float fov = 45.f;
+    glm::vec3 beamDir { 0.f, 0.f, -1.f };
+    glm::vec3 beamOrigin { 0.f, 0.f, 0.25f };
+    glm::vec2 beamHalf { 0.49f };
+    int beamRays = 256;
+    glm::vec3 beamPoint { 0.f, 0.f, 0.55f };
+    glm::vec3 beamNormal { 0.f, 0.f, -1.f };
+    float beamRadius = 0.52f;
+    glm::vec3 beamAlbedo { 1.f, 0.97f, 0.88f };
+    glm::vec3 wallPoint { 0.f, 0.f, -6.f };
+    glm::vec3 wallNormal { 0.f, 0.f, 1.f };
+    float wallRadius = 2.4f;
+    glm::vec3 wallAlbedo { 0.74f };
+    float mapHalf = 1.4f;
+    int bins = 256;
+    std::string note;
+};
+
 struct SceneDesc {
     std::string note;
     glm::vec3 eye { 0.f };
@@ -203,6 +233,8 @@ struct SceneDesc {
     glm::vec3 wallAlbedo { 0.74f };
     float mapHalf = 1.4f;
     int bins = 256;
+    std::vector<MeshEntry> catalog;
+    MeshEntry fallback;
 };
 
 glm::vec3 shadeWhite(const Camera &camera, const Scene &scene, const glm::ivec2 &pixel, const glm::vec3 &towardLight) {
@@ -338,6 +370,32 @@ struct AppState {
           currentModel(desc.meshPath.filename().string()) {
         mountLens();
         note = desc.note.empty() ? currentModel : desc.note;
+        sceneNote = note;
+    }
+
+    void applyMesh(const MeshEntry &entry, std::vector<Triangle> triangles) {
+        lens = std::make_unique<Model>(std::move(triangles));
+        meshScale = entry.scale;
+        meshRotate = entry.rotate;
+        meshTranslate = entry.translate;
+        ior = entry.eta;
+        triMax = std::max(0, entry.triMax);
+        beamDirection = glm::normalize(entry.beamDir);
+        beamOrigin = entry.beamOrigin;
+        beamHalf = entry.beamHalf;
+        beamRays = std::max(8, entry.beamRays);
+        mapHalf = std::max(1e-3f, entry.mapHalf);
+        causticBins = std::max(8, entry.bins);
+        wallAlbedo = entry.wallAlbedo;
+        beamMatAlbedo = entry.beamAlbedo;
+        beam = Plane(entry.beamPoint, entry.beamNormal, entry.beamRadius);
+        wall = Plane(entry.wallPoint, entry.wallNormal, entry.wallRadius);
+        camera.lookAt(entry.eye, entry.target, entry.fov);
+        currentModel = entry.name;
+        mountLens();
+        std::lock_guard<std::mutex> lock(inputMutex);
+        sceneNote = entry.note.empty() ? entry.name : entry.note;
+        note = sceneNote;
     }
 
     void mountLens() {
@@ -360,18 +418,24 @@ struct AppState {
             meshDirty.store(false);
         }
         if (name.empty() || name == currentModel) return;
-        auto triangles = loadObjTriangles(modelsDir / name, static_cast<size_t>(triMax));
+        const MeshEntry *found = nullptr;
+        for (const auto &entry : catalog) {
+            if (entry.name == name) {
+                found = &entry;
+                break;
+            }
+        }
+        MeshEntry entry = found ? *found : fallback;
+        const std::filesystem::path path = found ? found->path : modelsDir / name;
+        entry.name = name;
+        entry.path = path;
+        auto triangles = loadObjTriangles(path, static_cast<size_t>(std::max(0, entry.triMax)));
         if (triangles.empty()) {
             std::lock_guard<std::mutex> lock(inputMutex);
             note = "打不开 " + name;
             return;
         }
-        scene.clearShapes();
-        lens = std::make_unique<Model>(std::move(triangles));
-        mountLens();
-        currentModel = name;
-        std::lock_guard<std::mutex> lock(inputMutex);
-        note = name;
+        applyMesh(entry, std::move(triangles));
     }
 
     void resize(int w, int h) {
@@ -602,6 +666,8 @@ struct AppState {
     std::unique_ptr<Model> lens;
     std::filesystem::path modelsDir;
     std::vector<std::string> modelNames;
+    std::vector<MeshEntry> catalog;
+    MeshEntry fallback;
     std::string currentModel;
     std::string pendingModel;
     std::atomic<bool> meshDirty { false };
@@ -645,6 +711,7 @@ struct AppState {
     bool whiteModel = false;
     ViewMode view = ViewMode::Render;
     std::string note;
+    std::string sceneNote;
     int spp = 0;
     std::chrono::steady_clock::time_point lastTick = std::chrono::steady_clock::now();
 
@@ -887,7 +954,7 @@ NSImage *imageFromRGBA(const std::vector<uint8_t> &rgba, int w, int h) {
         std::lock_guard<std::mutex> lock(state->inputMutex);
         state->whiteModel = sender.state == NSControlStateValueOn;
         state->reset = true;
-        state->note = state->whiteModel ? "白模：只显示几何，不追踪光线" : "平行光沿 -Z，墙上是焦散";
+        state->note = state->whiteModel ? "白模：只显示几何，不追踪光线" : state->sceneNote;
     }
     state->clayEpoch.fetch_add(1);
     [self wake];
@@ -1041,54 +1108,122 @@ std::filesystem::path resolveMesh(const std::filesystem::path &scenePath, const 
     return {};
 }
 
+void readCamera(const Json &camera, MeshEntry &entry) {
+    entry.eye = camera.vec3("eye");
+    entry.target = camera.vec3("target");
+    entry.fov = camera.number("fovDeg");
+}
+
+void readBeam(const Json &beam, MeshEntry &entry) {
+    entry.beamDir = beam.vec3("direction");
+    entry.beamOrigin = beam.vec3("origin");
+    const Json &half = beam.need("halfExtent");
+    if (half.arr.size() != 2) throw std::runtime_error("beam.halfExtent 需要 2 个数");
+    entry.beamHalf = { static_cast<float>(half.arr[0].num), static_cast<float>(half.arr[1].num) };
+    entry.beamRays = beam.integerOr("rays", entry.beamRays);
+    const Json &marker = beam.need("marker");
+    entry.beamPoint = marker.vec3("point");
+    entry.beamNormal = marker.vec3("normal");
+    entry.beamRadius = marker.number("radius");
+    entry.beamAlbedo = marker.vec3Or("albedo", entry.beamAlbedo);
+}
+
+void readReceiver(const Json &receiver, MeshEntry &entry) {
+    entry.wallPoint = receiver.vec3("point");
+    entry.wallNormal = receiver.vec3("normal");
+    entry.wallRadius = receiver.number("radius");
+    entry.wallAlbedo = receiver.vec3Or("albedo", entry.wallAlbedo);
+    entry.mapHalf = receiver.numberOr("mapHalf", entry.mapHalf);
+    entry.bins = receiver.integerOr("bins", entry.bins);
+}
+
+void readMeshBody(const Json &mesh, MeshEntry &entry, const std::filesystem::path &scenePath) {
+    if (const Json *meshPath = mesh.find("path")) {
+        entry.path = resolveMesh(scenePath, meshPath->str);
+        if (entry.path.empty()) throw std::runtime_error("找不到网格 " + meshPath->str);
+        entry.name = entry.path.filename().string();
+    }
+    entry.triMax = mesh.integerOr("triMax", entry.triMax);
+    if (const Json *material = mesh.find("material")) {
+        entry.eta = material->numberOr("eta", entry.eta);
+        entry.rough = material->numberOr("rough", entry.rough);
+        entry.albedo = material->vec3Or("albedo", entry.albedo);
+    }
+    if (const Json *transform = mesh.find("transform")) {
+        entry.scale = transform->vec3Or("scale", entry.scale);
+        entry.rotate = transform->vec3Or("rotateDeg", entry.rotate);
+        entry.translate = transform->vec3Or("translate", entry.translate);
+    }
+    if (const Json *camera = mesh.find("camera")) readCamera(*camera, entry);
+    if (const Json *beam = mesh.find("beam")) readBeam(*beam, entry);
+    if (const Json *receiver = mesh.find("receiver")) readReceiver(*receiver, entry);
+    if (const Json *note = mesh.find("note")) entry.note = note->str;
+}
+
+void fillDesc(const MeshEntry &entry, SceneDesc &desc) {
+    desc.note = entry.note;
+    desc.eye = entry.eye;
+    desc.target = entry.target;
+    desc.fov = entry.fov;
+    desc.meshPath = entry.path;
+    desc.triMax = entry.triMax;
+    desc.meshScale = entry.scale;
+    desc.meshRotate = entry.rotate;
+    desc.meshTranslate = entry.translate;
+    desc.eta = entry.eta;
+    desc.rough = entry.rough;
+    desc.glassAlbedo = entry.albedo;
+    desc.beamDir = entry.beamDir;
+    desc.beamOrigin = entry.beamOrigin;
+    desc.beamHalf = entry.beamHalf;
+    desc.beamRays = entry.beamRays;
+    desc.beamPoint = entry.beamPoint;
+    desc.beamNormal = entry.beamNormal;
+    desc.beamRadius = entry.beamRadius;
+    desc.beamAlbedo = entry.beamAlbedo;
+    desc.wallPoint = entry.wallPoint;
+    desc.wallNormal = entry.wallNormal;
+    desc.wallRadius = entry.wallRadius;
+    desc.wallAlbedo = entry.wallAlbedo;
+    desc.mapHalf = entry.mapHalf;
+    desc.bins = entry.bins;
+}
+
 SceneDesc loadSceneDesc(const std::filesystem::path &path) {
     std::ifstream in(path);
     if (!in) throw std::runtime_error("打不开场景 " + path.string());
     std::stringstream buffer;
     buffer << in.rdbuf();
     const Json root = JsonParser(buffer.str()).parse();
-    SceneDesc desc;
-    if (const Json *note = root.find("note")) desc.note = note->str;
-    const Json &camera = root.need("camera");
-    desc.eye = camera.vec3("eye");
-    desc.target = camera.vec3("target");
-    desc.fov = camera.number("fovDeg");
-    const Json &beam = root.need("beam");
-    desc.beamDir = beam.vec3("direction");
-    desc.beamOrigin = beam.vec3("origin");
-    const Json &half = beam.need("halfExtent");
-    if (half.arr.size() != 2) throw std::runtime_error("beam.halfExtent 需要 2 个数");
-    desc.beamHalf = { static_cast<float>(half.arr[0].num), static_cast<float>(half.arr[1].num) };
-    desc.beamRays = beam.integerOr("rays", 256);
-    const Json &marker = beam.need("marker");
-    desc.beamPoint = marker.vec3("point");
-    desc.beamNormal = marker.vec3("normal");
-    desc.beamRadius = marker.number("radius");
-    desc.beamAlbedo = marker.vec3Or("albedo", desc.beamAlbedo);
-    const Json &receiver = root.need("receiver");
-    desc.wallPoint = receiver.vec3("point");
-    desc.wallNormal = receiver.vec3("normal");
-    desc.wallRadius = receiver.number("radius");
-    desc.wallAlbedo = receiver.vec3Or("albedo", desc.wallAlbedo);
-    desc.mapHalf = receiver.numberOr("mapHalf", desc.mapHalf);
-    desc.bins = receiver.integerOr("bins", desc.bins);
+    MeshEntry shared;
+    readCamera(root.need("camera"), shared);
+    readBeam(root.need("beam"), shared);
+    readReceiver(root.need("receiver"), shared);
+    if (glm::dot(shared.beamDir, shared.beamDir) < 1e-8f) throw std::runtime_error("beam.direction 不能是零向量");
+    if (const Json *note = root.find("note")) shared.note = note->str;
+
+    MeshEntry fallback = shared;
+    if (const Json *defaults = root.find("defaults")) readMeshBody(*defaults, fallback, path);
+    fallback.note = "这个模型还没写进场景 JSON，用的是 defaults。要单独调整，在 meshes 里加一项。";
+
     const Json &meshes = root.need("meshes");
     if (meshes.arr.empty()) throw std::runtime_error("场景 JSON 没有网格");
-    const Json &mesh = meshes.arr[0];
-    desc.meshPath = resolveMesh(path, mesh.text("path"));
-    if (desc.meshPath.empty()) throw std::runtime_error("找不到网格 " + mesh.text("path"));
-    desc.triMax = mesh.integerOr("triMax", 0);
-    if (const Json *material = mesh.find("material")) {
-        desc.eta = material->numberOr("eta", desc.eta);
-        desc.rough = material->numberOr("rough", desc.rough);
-        desc.glassAlbedo = material->vec3Or("albedo", desc.glassAlbedo);
+    SceneDesc desc;
+    for (const Json &mesh : meshes.arr) {
+        MeshEntry entry = shared;
+        entry.scale = fallback.scale;
+        entry.rotate = fallback.rotate;
+        entry.translate = fallback.translate;
+        entry.eta = fallback.eta;
+        entry.rough = fallback.rough;
+        entry.albedo = fallback.albedo;
+        entry.triMax = fallback.triMax;
+        readMeshBody(mesh, entry, path);
+        if (entry.path.empty()) throw std::runtime_error("meshes 项缺少 path");
+        desc.catalog.push_back(std::move(entry));
     }
-    if (const Json *transform = mesh.find("transform")) {
-        desc.meshScale = transform->vec3Or("scale", desc.meshScale);
-        desc.meshRotate = transform->vec3Or("rotateDeg", desc.meshRotate);
-        desc.meshTranslate = transform->vec3Or("translate", desc.meshTranslate);
-    }
-    if (glm::dot(desc.beamDir, desc.beamDir) < 1e-8f) throw std::runtime_error("beam.direction 不能是零向量");
+    desc.fallback = std::move(fallback);
+    fillDesc(desc.catalog.front(), desc);
     return desc;
 }
 
@@ -1116,6 +1251,8 @@ int main(int argc, char **argv) {
         }
         std::cerr << "场景 " << scenePath << "\n网格 " << desc.meshPath << "  " << triangles.size() << " 面\n";
         auto state = std::make_shared<AppState>(360, 270, desc, std::move(triangles));
+        state->catalog = std::move(desc.catalog);
+        state->fallback = std::move(desc.fallback);
         state->modelsDir = findModelsDir(scenePath);
         state->modelNames = listObjModels(state->modelsDir);
         if (dump) {

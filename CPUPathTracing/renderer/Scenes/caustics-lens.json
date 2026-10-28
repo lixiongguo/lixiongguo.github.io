@@ -25,6 +25,10 @@
     "mapHalf": 1.6,
     "bins": 256
   },
+  "defaults": {
+    "material": { "type": "dielectric", "albedo": [0.98, 0.98, 0.98], "rough": 0.0, "eta": 1.55 },
+    "transform": { "scale": [1.0, 1.0, 1.0], "rotateDeg": [0.0, 0.0, 0.0], "translate": [0.0, 0.0, 0.0] }
+  },
   "meshes": [
     {
       "path": "Models/output-Kushiro0.2.obj",
