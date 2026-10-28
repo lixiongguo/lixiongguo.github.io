@@ -91,6 +91,13 @@ const nativeTools = [
     detail: "本机平面窗口，下拉选择算法；粉红线是切缝，点开模型可改",
     cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
     bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "simple_param")
+  },
+  {
+    id: "cone-unwrap",
+    title: "锥奇异点展开",
+    detail: "左右两个视图，点「展开」才计算 Circle Pattern / CETM / Ricci / Incremental Flattening",
+    cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
+    bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "cone_unwrap")
   }
 ];
 
