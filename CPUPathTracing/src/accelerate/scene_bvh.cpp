@@ -4,6 +4,14 @@
 #include <array>
 #include <iostream>
 
+void SceneBVH::clear() {
+    nodes.clear();
+    ordered_instances.clear();
+    infinity_instances.clear();
+    root = nullptr;
+    allocator.reset();
+}
+
 void SceneBVH::build(std::vector<ShapeInstance> &&instances) {
     auto temp_instances = std::move(instances);
     for (auto &instance : temp_instances) {

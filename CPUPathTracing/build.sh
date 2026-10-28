@@ -69,7 +69,11 @@ build() {
 
 build_gui() {
   compile_bin "$1" debug_gui -fobjc-arc -framework Cocoa \
-    src/debug_gui.mm ../cpp/resource_hud.mm src/renderer/normal_renderer.cpp "${common_sources[@]}"
+    src/debug_gui.mm ../cpp/resource_hud.mm src/renderer/normal_renderer.cpp \
+    src/shape/triangle.cpp src/accelerate/bvh.cpp \
+    src/material/dielectric_material.cpp src/material/microfacet_theory.cpp \
+    src/light/uniform_infinite_light.cpp \
+    "${common_sources[@]}"
 }
 
 check_ppms() {

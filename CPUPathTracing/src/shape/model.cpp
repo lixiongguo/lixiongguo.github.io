@@ -65,7 +65,3 @@ Model::Model(const std::filesystem::path &filename) {
 
     bvh.build(std::move(triangles));
 }
-
-std::optional<HitInfo> Model::intersect(const Ray &ray, float t_min, float t_max) const {
-    return bvh.intersect(ray, t_min, t_max);
-}

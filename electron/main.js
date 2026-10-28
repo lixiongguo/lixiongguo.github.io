@@ -60,7 +60,7 @@ const nativeTools = [
   {
     id: "cpu-path-tracing-debug",
     title: "CPU路径追踪调试",
-    detail: "本机窗口，并排看 MIS 开和关",
+    detail: "本机窗口，焦散透镜场景",
     cwd: path.join(repoRoot, "CPUPathTracing"),
     bin: path.join(repoRoot, "CPUPathTracing", "build", "release", "debug_gui")
   },

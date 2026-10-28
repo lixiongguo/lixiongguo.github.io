@@ -34,3 +34,5 @@ imgs/imgs
 Tests/
 *.ply
 cpp/emsdk/
+CPUPathTracing/build/
+CPUPathTracing/Models/

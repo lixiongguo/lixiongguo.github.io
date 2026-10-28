@@ -13,7 +13,9 @@ public:
 
     Model(const std::filesystem::path &filename);
 
-    std::optional<HitInfo> intersect(const Ray &ray, float t_min, float t_max) const override;
+    std::optional<HitInfo> intersect(const Ray &ray, float t_min, float t_max) const override {
+        return bvh.intersect(ray, t_min, t_max);
+    }
 
     Bounds getBounds() const override { return bvh.getBounds(); }
     float getArea() const override { return bvh.getArea(); }

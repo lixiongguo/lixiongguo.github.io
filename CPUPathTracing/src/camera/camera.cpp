@@ -1,5 +1,6 @@
 #include "camera/camera.hpp"
 #include <glm/gtc/matrix_transform.hpp>
+#include <cmath>
 
 Camera::Camera(Film &film, const glm::vec3 &pos, const glm::vec3 &viewpoint, float fovy)
     : film(film), pos(pos), fovy(fovy) {
@@ -9,7 +10,7 @@ Camera::Camera(Film &film, const glm::vec3 &pos, const glm::vec3 &viewpoint, flo
     if (glm::abs(view_direction.y) == 1) {
         phi = 0;
     } else {
-        phi = glm::degrees(glm::acos(view_direction.x / glm::sqrt(view_direction.x * view_direction.x + view_direction.z * view_direction.z)));
+        phi = glm::degrees(std::atan2(view_direction.z, view_direction.x));
     }
 }
 
@@ -18,8 +19,9 @@ Ray Camera::generateRay(const glm::ivec2 &pixel_coord, const glm::vec2 &offset) 
     ndc.y = 1.f - ndc.y;
     // [0, 1] --> [-1, 1]
     ndc = 2.f * ndc - 1.f;
-    glm::vec4 clip { ndc, 0, 1 };
-    glm::vec3 world = world_from_camera * camera_from_clip * clip;
+    glm::vec4 clip { ndc.x, ndc.y, 0.f, 1.f };
+    glm::vec4 cam = camera_from_clip * clip;
+    glm::vec3 world = glm::vec3(world_from_camera * glm::vec4(glm::vec3(cam) / cam.w, 1.f));
     return Ray {
         pos,
         glm::normalize(world - pos)

@@ -36,6 +36,11 @@ public:
         float t_max = std::numeric_limits<float>::infinity()
     ) const override;
 
+    void clearShapes() {
+        instances.clear();
+        scene_bvh.clear();
+    }
+
     void build() {
         scene_bvh.build(std::move(instances));
         auto scene_bounds = scene_bvh.getBounds();

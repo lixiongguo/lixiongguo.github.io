@@ -71,6 +71,12 @@ public:
         return &(nodes_list.back()[ptr++]);
     }
 
+    void reset() {
+        for (auto *nodes : nodes_list) delete[] nodes;
+        nodes_list.clear();
+        ptr = 4096;
+    }
+
     ~SceneBVHTreeNodeAllocator() {
         for (auto *nodes : nodes_list) {
             delete[] nodes;
@@ -86,6 +92,7 @@ private:
 class SceneBVH : public Shape {
 public:
     void build(std::vector<ShapeInstance> &&instances);
+    void clear();
     std::optional<HitInfo> intersect(const Ray &ray, float t_min, float t_max) const override;
     Bounds getBounds() const override { return nodes[0].bounds; }
 private:
