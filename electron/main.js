@@ -98,6 +98,13 @@ const nativeTools = [
     detail: "左右两个视图，点「展开」才计算 Circle Pattern / CETM / Ricci / Incremental Flattening",
     cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
     bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "cone_unwrap")
+  },
+  {
+    id: "hof-unwrap",
+    title: "全纯1-形式",
+    detail: "左右两个视图，点「展开」才计算。粉红线是 C++ tree-cotree 割缝",
+    cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
+    bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "hof_unwrap")
   }
 ];
 
