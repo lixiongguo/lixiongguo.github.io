@@ -8,7 +8,7 @@
 [submodule "Tools/ddg-exercises"]
 	path = Tools/ddg-exercises
 	url = https://github.com/lixiongguo/ddg-exercises.git
-[submodule "origami-simulator"]
+[submodule "origami-simulator"];
 	path = origami-simulator
 	url = https://github.com/lixiongguo/OrigamiSimulator.git
 [submodule "treemaker"]
