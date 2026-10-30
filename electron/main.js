@@ -64,6 +64,25 @@ function existingDir(candidates) {
   return candidates[0];
 }
 
+// Windows 上本机实验是 Linux 二进制（WSL + WSLg），需要把 Windows 路径换成
+// WSL 能识别的 /mnt/<drive>/... 形式，并通过 wsl 启动。
+const isWindows = process.platform === "win32";
+
+function toWslPath(winPath) {
+  const text = String(winPath).replace(/\//g, "\\");
+  const match = text.match(/^([A-Za-z]):\\(.*)$/);
+  if (!match) return text.replace(/\\/g, "/");
+  return "/mnt/" + match[1].toLowerCase() + "/" + match[2].replace(/\\/g, "/");
+}
+
+function quoteShell(text) {
+  return '"' + String(text).replace(/"/g, '\\"') + '"';
+}
+
+function toolAvailable(tool) {
+  return fs.existsSync(tool.cwd) && fs.existsSync(path.join(tool.cwd, "build.sh"));
+}
+
 const cpuProject = existingDir([
   path.join(labRoot, "CPUPathTracing"),
   path.join(repoRoot, "CPUPathTracing")
@@ -126,12 +145,16 @@ const nativeTools = [
 ];
 
 function nativeCatalog() {
-  return nativeTools.map((tool) => ({
-    id: tool.id,
-    title: tool.title,
-    detail: tool.detail,
-    state: nativeState(tool.id)
-  }));
+  return nativeTools.map((tool) => {
+    const available = toolAvailable(tool);
+    return {
+      id: tool.id,
+      title: tool.title,
+      detail: available ? tool.detail : "源码目录缺失，无法构建",
+      available,
+      state: available ? nativeState(tool.id) : "unavailable"
+    };
+  });
 }
 
 function nativeState(id) {
@@ -158,12 +181,19 @@ function broadcast(channel, payload) {
 
 function compileNative(tool) {
   return new Promise((resolve, reject) => {
-    const child = spawn("bash", ["build.sh", "gui-build"], { cwd: tool.cwd });
+    let child;
+    if (isWindows) {
+      const script = "cd " + quoteShell(toWslPath(tool.cwd)) + " && ./build.sh gui-build";
+      child = spawn("wsl", ["--", "bash", "-lc", script]);
+    } else {
+      child = spawn("bash", ["build.sh", "gui-build"], { cwd: tool.cwd });
+    }
     let err = "";
     child.stderr.on("data", (chunk) => {
       err += chunk.toString();
       if (err.length > 4000) err = err.slice(-4000);
     });
+    child.stdout.on("data", () => { /* keep the pipe drained */ });
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code === 0 && fs.existsSync(tool.bin)) resolve();
@@ -173,7 +203,15 @@ function compileNative(tool) {
 }
 
 function startNative(tool) {
-  const child = spawn(tool.bin, [], { cwd: tool.cwd, stdio: "ignore" });
+  let child;
+  if (isWindows) {
+    console.log("[native] wsl start:", tool.id);
+    // 程序靠相对路径找场景/资源，所以先 cd 到工程目录再 exec。
+    const script = "cd " + quoteShell(toWslPath(tool.cwd)) + " && exec " + quoteShell(toWslPath(tool.bin));
+    child = spawn("wsl", ["--", "bash", "-lc", script], { stdio: "ignore" });
+  } else {
+    child = spawn(tool.bin, [], { cwd: tool.cwd, stdio: "ignore" });
+  }
   nativeChildren.set(tool.id, child);
   child.on("exit", () => {
     if (nativeChildren.get(tool.id) === child) nativeChildren.delete(tool.id);
@@ -203,6 +241,9 @@ ipcMain.handle("get-native-tools", () => nativeCatalog());
 ipcMain.handle("launch-native", async (_event, id) => {
   const tool = nativeTools.find((item) => item.id === id);
   if (!tool) return { ok: false, message: "未知工具" };
+  if (!toolAvailable(tool)) {
+    return { ok: false, state: "unavailable", message: "源码目录缺失，无法构建" };
+  }
   if (nativeState(tool.id) === "running") {
     return { ok: true, state: "running", message: "调试窗口已打开" };
   }
@@ -253,7 +294,7 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  const marker = path.join(docsRoot, "uv-unwrap-simple.html");
+  const marker = path.join(docsRoot, "index.html");
   if (!fs.existsSync(marker)) {
     dialog.showErrorBox(
       "缺少构建结果",
