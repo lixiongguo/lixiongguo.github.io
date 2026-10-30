@@ -20,3 +20,6 @@
 [submodule "cpp/ddg-exercises"]
 	path = cpp/ddg-exercises
 	url = https://github.com/lixiongguo/ddg-exercises.git
+[submodule "CPUPathTracing"]
+	path = CPUPathTracing
+	url = https://github.com/lixiongguo/CPUPathTracing.git

@@ -1,21 +1,18 @@
-<!-- <script>
-  // 首次访问首页时，随机跳转到一篇参数化文章
-  var paramUrls = [
-    {% assign param_posts = site.posts | where_exp: "post", "post.path contains 'Parameterization'" %}
-    {% for post in param_posts %}
-    "{{ post.url | relative_url }}"{% unless forloop.last %},{% endunless %}
-    {% endfor %}
-  ];
+<script>
+  // 进入主页时随机跳转到一篇参数化文章
   (function() {
-    if (!sessionStorage.getItem('paramVisited')) {
-      sessionStorage.setItem('paramVisited', 'true');
-      if (paramUrls.length > 0) {
-        var idx = Math.floor(Math.random() * paramUrls.length);
-        window.location.replace(paramUrls[idx]);
-      }
+    var paramUrls = [
+      {% assign param_posts = site.posts | where_exp: "post", "post.path contains 'Parameterization'" %}
+      {% for post in param_posts %}
+      "{{ post.url | relative_url }}"{% unless forloop.last %},{% endunless %}
+      {% endfor %}
+    ];
+    if (paramUrls.length > 0) {
+      var idx = Math.floor(Math.random() * paramUrls.length);
+      window.location.replace(paramUrls[idx]);
     }
   })();
-</script> -->
+</script>
 
 <article class="post">
   <header class="post-header home">
