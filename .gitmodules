@@ -1,28 +1,3 @@
-[submodule "cpp/conformal-parameterization"]
-	path = cpp/conformal-parameterization
-	url = https://github.com/lixiongguo/conformal-parameterization.git
-	branch = wasm_dev
-[submodule "cpp/OptimalTransport"]
-	path = cpp/OptimalTransport
-	url = https://github.com/lixiongguo/OptimalTransport.git
-[submodule "Tools/ddg-exercises"]
-	path = Tools/ddg-exercises
-	url = https://github.com/lixiongguo/ddg-exercises.git
-[submodule "origami-simulator"];
-	path = origami-simulator
-	url = https://github.com/lixiongguo/OrigamiSimulator.git
-[submodule "treemaker"]
-	path = treemaker
-	url = https://github.com/lixiongguo/treemaker.git
-[submodule "cpp/CDT"]
-	path = cpp/CDT
-	url = https://github.com/lixiongguo/CDT.git
-[submodule "cpp/ddg-exercises"]
-	path = cpp/ddg-exercises
-	url = https://github.com/lixiongguo/ddg-exercises.git
-[submodule "CPUPathTracing"]
-	path = CPUPathTracing
-	url = https://github.com/lixiongguo/CPUPathTracing.git
 [submodule "cpp/Fluid3D"]
 	path = cpp/Fluid3D
 	url = https://github.com/lixiongguo/Fluid3d.git

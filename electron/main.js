@@ -87,6 +87,11 @@ const cpuProject = existingDir([
   path.join(labRoot, "CPUPathTracing"),
   path.join(repoRoot, "CPUPathTracing")
 ]);
+// Fluid3D 已独立成仓库并迁到外层（站点仓库里只保留 submodule 引用）
+const fluidProject = existingDir([
+  path.join(labRoot, "Fluid3D"),
+  path.join(repoRoot, "cpp", "Fluid3D")
+]);
 const curvatureProject = existingDir([
   path.join(labRoot, "ddg-exercises", "projects", "principal-curvature-field"),
   path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field")
@@ -104,8 +109,8 @@ const nativeTools = [
     id: "fluid3d",
     title: "流体模拟",
     detail: "本机窗口，自由液面粒子",
-    cwd: path.join(repoRoot, "cpp", "Fluid3D"),
-    bin: path.join(repoRoot, "cpp", "Fluid3D", "build", "release", "viewer")
+    cwd: fluidProject,
+    bin: path.join(fluidProject, "build", "release", "viewer")
   },
   {
     id: "principal-curvature-field",
