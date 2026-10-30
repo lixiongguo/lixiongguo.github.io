@@ -6,6 +6,7 @@ const { createStaticServer, listen } = require("./static-server");
 const { createProfiler } = require("./profile");
 
 const repoRoot = path.resolve(__dirname, "..");
+const labRoot = path.resolve(repoRoot, "..");
 const docsRoot = path.join(repoRoot, "docs");
 const demosPath = path.join(repoRoot, "_data", "algo_demos.yml");
 const launcherPath = path.join(__dirname, "launcher.html");
@@ -56,13 +57,29 @@ let profiler = null;
 let latestProfile = null;
 const nativeChildren = new Map();
 
+function existingDir(candidates) {
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) return dir;
+  }
+  return candidates[0];
+}
+
+const cpuProject = existingDir([
+  path.join(labRoot, "CPUPathTracing"),
+  path.join(repoRoot, "CPUPathTracing")
+]);
+const curvatureProject = existingDir([
+  path.join(labRoot, "ddg-exercises", "projects", "principal-curvature-field"),
+  path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field")
+]);
+
 const nativeTools = [
   {
     id: "cpu-path-tracing-debug",
     title: "CPU路径追踪调试",
     detail: "本机窗口，焦散透镜场景",
-    cwd: path.join(repoRoot, "CPUPathTracing"),
-    bin: path.join(repoRoot, "CPUPathTracing", "build", "release", "debug_gui")
+    cwd: cpuProject,
+    bin: path.join(cpuProject, "build", "release", "debug_gui")
   },
   {
     id: "fluid3d",
@@ -75,36 +92,36 @@ const nativeTools = [
     id: "principal-curvature-field",
     title: "主曲率场",
     detail: "QuadCover 主曲率，可换模型",
-    cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
-    bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "main")
+    cwd: curvatureProject,
+    bin: path.join(curvatureProject, "build", "bin", "main")
   },
   {
     id: "quad-meshing",
     title: "四边形网格",
     detail: "本机窗口，可换模型，跑朴素合并 / MIQ / QuadCover",
-    cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
-    bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "quad_test")
+    cwd: curvatureProject,
+    bin: path.join(curvatureProject, "build", "bin", "quad_test")
   },
   {
     id: "simple-param",
     title: "简单参数化",
     detail: "本机平面窗口，下拉选择算法；粉红线是切缝，点开模型可改",
-    cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
-    bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "simple_param")
+    cwd: curvatureProject,
+    bin: path.join(curvatureProject, "build", "bin", "simple_param")
   },
   {
     id: "cone-unwrap",
     title: "锥奇异点展开",
     detail: "左右两个视图，点「展开」才计算 Circle Pattern / CETM / Ricci / Incremental Flattening",
-    cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
-    bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "cone_unwrap")
+    cwd: curvatureProject,
+    bin: path.join(curvatureProject, "build", "bin", "cone_unwrap")
   },
   {
     id: "hof-unwrap",
     title: "全纯1-形式",
     detail: "左右两个视图，点「展开」才计算。粉红线是 C++ tree-cotree 割缝",
-    cwd: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field"),
-    bin: path.join(repoRoot, "cpp", "ddg-exercises", "projects", "principal-curvature-field", "build", "bin", "hof_unwrap")
+    cwd: curvatureProject,
+    bin: path.join(curvatureProject, "build", "bin", "hof_unwrap")
   }
 ];
 

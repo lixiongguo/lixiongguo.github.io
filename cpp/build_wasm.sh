@@ -4,7 +4,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-DEFAULT_MAKE_DIR="$SCRIPT_DIR/conformal-parameterization/wasm"
+if [[ -d "$SCRIPT_DIR/conformal-parameterization/wasm" ]]; then
+  DEFAULT_MAKE_DIR="$SCRIPT_DIR/conformal-parameterization/wasm"
+else
+  DEFAULT_MAKE_DIR="$REPO_ROOT/../conformal-parameterization/wasm"
+fi
 MANIFEST="$SCRIPT_DIR/wasm_packages.yaml"
 
 TARGET="${1:-page}"
