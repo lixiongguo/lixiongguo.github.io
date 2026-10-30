@@ -79,8 +79,13 @@ function quoteShell(text) {
   return '"' + String(text).replace(/"/g, '\\"') + '"';
 }
 
+function canBuild(tool) {
+  return fs.existsSync(path.join(tool.cwd, "build.sh"));
+}
+
 function toolAvailable(tool) {
-  return fs.existsSync(tool.cwd) && fs.existsSync(path.join(tool.cwd, "build.sh"));
+  if (!fs.existsSync(tool.cwd)) return false;
+  return fs.existsSync(tool.bin) || canBuild(tool);
 }
 
 const cpuProject = existingDir([
@@ -213,17 +218,27 @@ function startNative(tool) {
     console.log("[native] wsl start:", tool.id);
     // 程序靠相对路径找场景/资源，所以先 cd 到工程目录再 exec。
     const script = "cd " + quoteShell(toWslPath(tool.cwd)) + " && exec " + quoteShell(toWslPath(tool.bin));
-    child = spawn("wsl", ["--", "bash", "-lc", script], { stdio: "ignore" });
+    child = spawn("wsl", ["--", "bash", "-lc", script], { stdio: ["ignore", "pipe", "pipe"] });
   } else {
-    child = spawn(tool.bin, [], { cwd: tool.cwd, stdio: "ignore" });
+    child = spawn(tool.bin, [], { cwd: tool.cwd, stdio: ["ignore", "pipe", "pipe"] });
   }
+  let output = "";
+  const keep = (chunk) => {
+    output += chunk.toString();
+    if (output.length > 4000) output = output.slice(-4000);
+  };
+  if (child.stdout) child.stdout.on("data", keep);
+  if (child.stderr) child.stderr.on("data", keep);
   nativeChildren.set(tool.id, child);
-  child.on("exit", () => {
+  child.on("exit", (code) => {
     if (nativeChildren.get(tool.id) === child) nativeChildren.delete(tool.id);
+    const line = output.trim().split(/\r?\n/).filter(Boolean).pop();
+    const failed = code !== 0 && code !== null;
+    if (failed) console.log("[native] exit", tool.id, code, line || "");
     broadcast("native-status", {
       id: tool.id,
       state: "idle",
-      message: tool.detail
+      message: failed ? (line || "进程已退出") : tool.detail
     });
   });
   child.on("error", (err) => {
@@ -254,6 +269,9 @@ ipcMain.handle("launch-native", async (_event, id) => {
   }
   try {
     if (!fs.existsSync(tool.bin)) {
+      if (!canBuild(tool)) {
+        return { ok: false, state: "unavailable", message: "没有可执行文件，也没有 build.sh" };
+      }
       broadcast("native-status", { id: tool.id, state: "building", message: "正在编译…" });
       await compileNative(tool);
     }
