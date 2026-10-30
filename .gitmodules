@@ -23,3 +23,6 @@
 [submodule "CPUPathTracing"]
 	path = CPUPathTracing
 	url = https://github.com/lixiongguo/CPUPathTracing.git
+[submodule "cpp/Fluid3D"]
+	path = cpp/Fluid3D
+	url = https://github.com/lixiongguo/Fluid3d.git
