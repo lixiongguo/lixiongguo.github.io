@@ -4,8 +4,14 @@ _site/
 .jekyll-cache/
 .jekyll-metadata
 vendor/
-*/.DS_Store
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+__MACOSX/
 wechat/
 node_modules/
 cpp/Libigl-Discrete-Geometry
