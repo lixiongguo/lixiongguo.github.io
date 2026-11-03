@@ -1,4 +1,4 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.module.js';
+import * as THREE from 'three';
 import * as entity from '../base/entity.js';
 import * as passes from '../base/passes.js';
 import * as terrain_component from '../base/render/terrain-component.js';

@@ -109,3 +109,10 @@
   thumbnail: /assets/gallery/little-tokyo.png
   detail_url: "/gallery/little-tokyo.html"
   ready: true
+
+- slug: quick-grass
+  title: Quick Grass 程序化草地
+  description: Three.js 程序化草地：风场驱动草叶摆动、地形高度图、昼夜天空与水体后处理，支持第一/第三人称漫游。
+  thumbnail: /gallery/Quick_Grass/public/textures/grass.png
+  detail_url: "/gallery/Quick_Grass/"
+  ready: true

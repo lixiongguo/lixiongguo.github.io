@@ -24,7 +24,7 @@ export const demo_builder = (() => {
 
     LoadMaterial_(albedoName, normalName, roughnessName, metalnessName) {
       const textureLoader = new THREE.TextureLoader();
-      const albedo = textureLoader.load('./textures/' + albedoName);
+      const albedo = textureLoader.load('public/textures/' + albedoName);
       albedo.anisotropy = this.FindEntity('threejs').GetComponent('ThreeJSController').getMaxAnisotropy();
       albedo.wrapS = THREE.RepeatWrapping;
       albedo.wrapT = THREE.RepeatWrapping;
