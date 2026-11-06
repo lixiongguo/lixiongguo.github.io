@@ -609,13 +609,21 @@ def install_selector(core, selector) -> None:
     core._collect_md_files = wrapped
 
 
-def install_continuous_numbering(core) -> None:
-    """章节标题跨目录连续编号（原实现每个目录都从第 1 章重新计数）。"""
+def install_layout(core, page_break: str = "article") -> None:
+    """版式：章为一级标题，文章降为二级；章内篇与篇之间分页（不改源码）。
+
+    page_break:
+      article — 章内每篇文章另起一页（默认）；章首第一篇紧跟章标题
+      chapter — 章内文章接排
+      none    — 不分页
+    """
     state = {"n": 0}
+    BREAK = "\n\n\\clearpage\n\n"
 
     def merge_folder_content(folder, dl_dir, *, single_chapter, on_log=None):
         files = core._collect_md_files(folder, single_chapter)
         parts: list[str] = []
+        started_here = False
         for fname in files:
             path = os.path.join(folder, fname)
             with open(path, encoding="utf-8") as fh:
@@ -624,22 +632,112 @@ def install_continuous_numbering(core) -> None:
             title = m.group(1) if m else os.path.splitext(fname)[0]
             text = re.sub(r"^---\s*\n.*?\n---\s*\n", "", text, count=1, flags=re.DOTALL)
             text = core._preprocess_md(text, folder, dl_dir, on_log)
+
+            # 章首第一篇贴着章标题排；章内后续篇另起一页
+            sep = BREAK if (page_break == "article" and started_here) else ""
+            started_here = True
+
             if single_chapter:
-                parts.append(f"\n\n{text}\n")
+                parts.append(f"{sep}\n\n{text}\n")
             else:
                 state["n"] += 1
-                parts.append(f"\n\n# 第{state['n']}章  {title}\n\n{text}\n")
+                parts.append(f"{sep}\n\n## {title}\n\n{text}\n")
         return "".join(parts), len(files)
 
     core._merge_folder_content = merge_folder_content
 
 
+_TEX_ESCAPE = {
+    "\\": r"\textbackslash{}",
+    "&": r"\&",
+    "%": r"\%",
+    "$": r"\$",
+    "#": r"\#",
+    "_": r"\_",
+    "{": r"\{",
+    "}": r"\}",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+}
+
+
+def _tex_escape(text: str) -> str:
+    return "".join(_TEX_ESCAPE.get(ch, ch) for ch in text)
+
+
+def chapter_opening(title: str) -> list[str]:
+    """章首页：标题垂直居中、字号加大，下方一条横线，前后各分页。"""
+    t = _tex_escape(title)
+    return [
+        "\\clearpage",
+        "",
+        "\\phantomsection",
+        "\\addcontentsline{toc}{section}{" + t + "}",
+        "\\vspace*{\\fill}",
+        "\\begin{center}",
+        "{\\fontsize{26}{34}\\selectfont\\bfseries " + t + "}",
+        "\\end{center}",
+        "\\vspace{8mm}",
+        "\\begin{center}",
+        "\\rule{0.42\\textwidth}{0.8pt}",
+        "\\end{center}",
+        "\\vspace*{\\fill}",
+        "\\clearpage",
+        "",
+    ]
+
+
+def install_chapter_breaks(core, enabled: bool = True) -> None:
+    """让每个章标题独占一页。
+
+    底层把章标题拼在正文之前，包装层拿不到拼接点，所以在编译前改写 merged.md：
+    除书名（第一个一级标题）外，章标题整行换成一张「章首页」——标题垂直居中、
+    字号加大、下方一条横线，前后各分页，该章正文从下一页开始。
+    目录条目用 addcontentsline 补回，页码指向章首页。代码块内的 # 注释跳过。
+    """
+    if not enabled:
+        return
+
+    original = core._compile_merged_md
+
+    def wrapped(md_path, output_pdf, title, work, merged_count, on_log=None):
+        try:
+            with open(md_path, encoding="utf-8") as fh:
+                lines = fh.read().split("\n")
+        except OSError:
+            return original(md_path, output_pdf, title, work, merged_count, on_log)
+
+        out: list[str] = []
+        in_fence = False
+        seen_title = False
+        for line in lines:
+            stripped = line.lstrip()
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                in_fence = not in_fence
+            elif not in_fence and line.startswith("# "):
+                if seen_title:
+                    out.extend(chapter_opening(line[2:].strip()))
+                    continue
+                seen_title = True
+            out.append(line)
+
+        try:
+            with open(md_path, "w", encoding="utf-8") as fh:
+                fh.write("\n".join(out))
+        except OSError:
+            pass
+        return original(md_path, output_pdf, title, work, merged_count, on_log)
+
+    core._compile_merged_md = wrapped
+
+
 def resolve_published_only(args) -> bool:
-    if args.all:
+    """默认只收「日期前缀 + frontmatter」的成稿；只有显式 --all / published_only=False 才放开。"""
+    if getattr(args, "all", False):
         return False
-    if args.published_only:
-        return True
-    return any("_posts" in Path(p).expanduser().resolve().parts for p in args.paths)
+    if getattr(args, "published_only", None) is False:
+        return False
+    return True
 
 
 def cmd_build(args) -> int:
@@ -682,7 +780,9 @@ def cmd_build(args) -> int:
 
     if published_only:
         install_selector(core, is_published)
-    install_continuous_numbering(core)
+    page_break = getattr(args, "page_break", "article")
+    install_layout(core, page_break)
+    install_chapter_breaks(core, page_break != "none")
 
     if args.output:
         out = Path(args.output).expanduser().resolve()
@@ -792,9 +892,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--output")
     p.add_argument("--title")
     p.add_argument("--font")
-    p.add_argument("--published-only", action="store_true",
-                   help="仅打包：文件名带日期前缀 且 有 frontmatter")
-    p.add_argument("--all", action="store_true", help="打包全部 .md")
+    p.add_argument("--published-only", action="store_const", const=True, default=None,
+                   help="仅打包：文件名带日期前缀 且 有 frontmatter（默认已启用，保留以兼容旧命令）")
+    p.add_argument("--all", action="store_true", help="打包全部 .md（关闭成稿筛选，调试用）")
+    p.add_argument("--page-break", choices=["article", "chapter", "none"], default="article",
+                   help="分页粒度：article=每篇另起页（默认），chapter=仅每章另起页，none=不分页")
     p.add_argument("--list-only", action="store_true", help="只列入选/排除清单")
     p.add_argument("--max-issues", type=int, default=40)
     p.add_argument("--json", action="store_true")

@@ -42,8 +42,9 @@ _DEFAULTS = {
     "output": None,
     "title": None,
     "font": None,
-    "published_only": None,
+    "published_only": True,
     "all": False,
+    "page_break": "article",
     "list_only": False,
     "max_issues": 40,
     "json": False,
@@ -60,7 +61,8 @@ server = _Server(
     instructions=(
         "把 Markdown 文章或章节目录打包成 PDF。"
         "动手前先调用 packpdf_doctor 检查 pandoc / xelatex / 字体；"
-        "打包 _posts 目录时用 published_only=true 只打成稿文章；"
+        "默认只打成稿文章（文件名带 YYYY-MM-DD 前缀且含 frontmatter），其余进排除清单；"
+        "章为一级标题、文章为二级标题，章与章之间、篇与篇之间自动分页；"
         "有本地图片时先 packpdf_images_scan，再用 packpdf_images_upload(apply=true) 上传替换。"
     ),
 )
@@ -123,15 +125,18 @@ def packpdf_images_upload(
 
 @server.tool(description=(
     "把 Markdown 编译成 PDF（pandoc + xelatex，两遍）。"
-    "published_only=true 时只打包「文件名带 YYYY-MM-DD 前缀且含 frontmatter」的成稿文章，"
-    "适合 _posts；不传则路径含 _posts 时自动启用。"
+    "默认只收「文件名带 YYYY-MM-DD 前缀且含 frontmatter」的成稿文章，其余留在排除清单里；"
+    "published_only=false 仅用于明确要求打包草稿的场景。"
+    "章为一级标题、文章为二级标题，page_break 控制分页粒度"
+    "（article=每篇另起页，默认；chapter=仅每章另起页；none=不分页）。"
     "list_only=true 只返回入选/排除清单，不编译。"
 ))
 def packpdf_build_pdf(
     paths: list[str],
     output: str | None = None,
     title: str | None = None,
-    published_only: bool | None = None,
+    published_only: bool = True,
+    page_break: str = "article",
     list_only: bool = False,
     font: str | None = None,
 ) -> dict:
@@ -144,6 +149,7 @@ def packpdf_build_pdf(
             title=title,
             font=font,
             published_only=published_only,
+            page_break=page_break,
             all=False,
             list_only=list_only,
         )

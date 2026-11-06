@@ -43,7 +43,7 @@ $$
 加入熵项后，最优耦合有显式结构：
 
 $$
-P^\*=\operatorname{diag}(u)\,K\,\operatorname{diag}(v),
+P^{*}=\operatorname{diag}(u)\,K\,\operatorname{diag}(v),
 $$
 
 其中
@@ -52,7 +52,7 @@ $$
 K_{ij}=\exp\left(-\frac{C_{ij}}{\varepsilon}\right).
 $$
 
-问题就变成：寻找两个缩放向量 $u,v$，使得 $P^\*$ 满足边缘约束。
+问题就变成：寻找两个缩放向量 $u,v$，使得 $P^{*}$ 满足边缘约束。
 
 这一步之所以重要，是因为它把原本的大规模约束优化，转成了矩阵缩放问题。
 
@@ -83,7 +83,7 @@ $$
 3. 交替归一化行与列；
 4. 收敛后恢复耦合
    $$
-   P^\*=\operatorname{diag}(u)K\operatorname{diag}(v).
+   P^{*}=\operatorname{diag}(u)K\operatorname{diag}(v).
    $$
 
 ## 4. Sinkhorn 的优缺点

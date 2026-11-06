@@ -59,20 +59,27 @@ python scripts/pack.py images upload <PATH...> --apply    # 上传并替换路�
 
 ### 4. 打包
 
-```bash
-# 已成稿文章（文件名带日期前缀 + 有 frontmatter），适合 _posts
-python scripts/pack.py build <PATH...> --published-only -o book.pdf
+默认就只打成稿文章，不需要额外开关：
 
-# 普通笔记（无日期前缀、无 frontmatter）
-python scripts/pack.py build <PATH...> -o notes.pdf
+```bash
+# 成书（默认：仅日期前缀 + frontmatter 的文章；章与篇之间自动分页）
+python scripts/pack.py build <PATH...> -o book.pdf
+
+# 分页粒度：article=每篇另起页（默认）/ chapter=仅每章另起页 / none=不分页
+python scripts/pack.py build <PATH...> --page-break chapter -o book.pdf
 
 # 调试：只列入选/排除清单，不编译
-python scripts/pack.py build <PATH...> --published-only --list-only
+python scripts/pack.py build <PATH...> --list-only
+
+# 例外：连草稿一起打，仅用户明确要求时用
+python scripts/pack.py build <PATH...> --all -o drafts.pdf
 ```
 
-输入路径中含 `_posts` 时默认启用 `--published-only`；`--all` 可覆盖。
+「已成稿」判定 = 文件名匹配 `YYYY-MM-DD-*.md` **且** 文件开头有 YAML frontmatter，等价于 Jekyll 会真正渲染的文章。缺任一条都进排除清单并注明原因，与路径是否含 `_posts` 无关。
 
-「已成稿」判定 = 文件名匹配 `YYYY-MM-DD-*.md` **且** 文件开头有 YAML frontmatter，等价于 Jekyll 会真正渲染的文章。
+版式：目录名 → `#` 章标题（一级），frontmatter `title` → `##` 节标题（二级）。
+
+分页位置：章标题**前后各插一个 `\clearpage`**，标题独占一页，该章正文从下一页开始；`article` 模式下章内第二篇起每篇标题前也插 `\clearpage`。代码块里的 `#` 注释不会被当作标题。
 
 ### 5. 校验
 
@@ -87,15 +94,17 @@ python scripts/pack.py verify <out.pdf>
 | 项 | 说明 |
 |---|---|
 | 章节标题 | 目录名 `1.基础曲面展开方法` → `第一章 基础曲面展开方法`；`0.前言` → `前言` |
-| 文章标题 | 取 frontmatter 的 `title:`，没有则用文件名 |
-| 编号 | 跨章节连续编号（`第1章` 起累加） |
+| 文章标题 | 取 frontmatter 的 `title:`，没有则用文件名；渲染为二级标题，不进一级目录 |
+| 分页 | `--page-break article`（默认）每篇另起页；`chapter` 仅每章另起页；`none` 不分页 |
+| 目录 | `--toc-depth=1`，只列章，条目即分页后的实际页码 |
 | 中文字体 | 默认 macOS `Songti SC`、Linux `Noto Serif CJK SC`、Windows `SimSun`，可用 `--font` 覆盖 |
 | 输出默认位置 | `<PackPDF>/PDF_output/` |
 | 输出被占用 | 底层自动改存带时间戳的文件名，需在结果中明确告知 |
 
 ## 约束
 
-- **不修改 PackPDF 源码**；筛选与编号通过运行时包装实现，字体通过 `PACKPDF_CJK_FONT` 环境变量传入。
+- **不修改 PackPDF 源码**；筛选、层级与分页通过运行时包装实现，字体通过 `PACKPDF_CJK_FONT` 环境变量传入。
+- 默认只打成稿；`--all` 只在用户明确要求打包草稿时使用，并在结果里说明混入了哪些非成稿文件。
 - 上传、替换路径、自动修复公式都会写文件，必须显式 `--apply`，且先备份。
 - 中文路径与空格一律用参数列表传递，不拼接 shell 字符串。
 - 交付结果时回显绝对路径、页数、大小；有排除项时说明原因。

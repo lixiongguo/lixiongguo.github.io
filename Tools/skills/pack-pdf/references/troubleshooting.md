@@ -21,7 +21,8 @@
 | OSS `NoSuchKey` 之外的异常 | 网络或凭证问题 | 检查 AK/SK 与 bucket 地域；失败会自动重试 3 次 |
 | 上传成功但页面还是旧图 | OSS 已有同名对象被跳过 | 加 `--force` 覆盖 |
 | 目录里少了几篇 | 底层只读一层目录 | 把子目录作为独立输入，或传父目录让 Skill 展开 |
-| PDF 里出现「暂存」「原文」等草稿 | 未启用成稿筛选 | 加 `--published-only`，先用 `--list-only` 核对名单 |
+| PDF 里出现「暂存」「原文」等草稿 | 用了 `--all` 或 `published_only=false` 关闭了成稿筛选 | 去掉该开关（默认就只收成稿），先用 `--list-only` 核对名单 |
+| 章与章接排在同一页 | 用了 `--page-break none` | 改回默认 `article` 或 `chapter` |
 | 章号每个章节都从「第1章」重新开始 | 原实现按目录计数 | 本 Skill 已改为跨章连续编号 |
 | 目录太长 / 太短 | TOC 深度固定为 1 | 需要调整时改 `packpdf/core.py` 的 `--toc-depth` |
 
