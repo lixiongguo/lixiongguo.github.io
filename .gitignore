@@ -14,6 +14,7 @@ vendor/
 __MACOSX/
 wechat/
 node_modules/
+.venv/
 cpp/Libigl-Discrete-Geometry
 
 # 第三方库：只下载不修改，不作为 submodule 管理

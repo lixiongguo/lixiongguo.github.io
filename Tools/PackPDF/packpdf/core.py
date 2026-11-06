@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -16,6 +17,18 @@ from .deps import deps_ok, ensure_toolchain_path
 
 LogFn = Callable[[str], None]
 _dl_cache: dict[str, str] = {}
+
+
+def _cjk_font() -> str:
+    """中文字体：优先 PACKPDF_CJK_FONT，其次按平台选择。"""
+    font = os.environ.get('PACKPDF_CJK_FONT', '').strip()
+    if font:
+        return font
+    if sys.platform == 'darwin':
+        return 'Songti SC'
+    if sys.platform.startswith('linux'):
+        return 'Noto Serif CJK SC'
+    return 'SimSun'
 
 
 @dataclass
@@ -236,9 +249,9 @@ def _compile_merged_md(
             'pandoc', md_path, '-o', tex_path,
             '--standalone', '--toc', '--toc-depth=1',
             '-f', 'markdown+tex_math_dollars+raw_tex',
-            '-V', 'mainfont=SimSun',
+            '-V', f'mainfont={_cjk_font()}',
             '-V', f'title={title}',
-            '-V', 'CJKmainfont=SimSun',
+            '-V', f'CJKmainfont={_cjk_font()}',
             '-V', 'geometry=margin=2.5cm',
         ],
         capture_output=True,
