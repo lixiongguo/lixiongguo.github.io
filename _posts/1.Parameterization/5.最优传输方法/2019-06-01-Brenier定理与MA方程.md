@@ -5,7 +5,7 @@ category: Parameterization
 categories: ["Parameterization", "Parameterization-OptimalTransport"]
 ---
 
-针对最重要的**二次代价函数** $c(x,y) = \frac{1}{2}\|x - y\|^2$，Brenier 给出了最优传输映射的显式结构：
+针对最重要的**二次代价函数** $c(x,y) = \frac{1}{2}\lVert x - y\rVert ^2$，Brenier 给出了最优传输映射的显式结构：
 
  **Brenier 定理**：对于绝对连续的 $\mu$（$\mu \ll \mathcal{L}^d$），二次代价下的最优传输映射 $T$ 存在且唯一，且可表示为某个凸函数 $\phi$ 的梯度：
 
@@ -24,23 +24,23 @@ $$
 而 Kantorovich 势对 $(\phi_K, \psi_K)$ 可取为
 
 $$
-\phi_K(x) = \phi(x) - \frac{1}{2}\|x\|^2, 
-\psi_K(y) = \phi^*(y) - \frac{1}{2}\|y\|^2,
+\phi_K(x) = \phi(x) - \frac{1}{2}\lVert x\rVert ^2, 
+\psi_K(y) = \phi^*(y) - \frac{1}{2}\lVert y\rVert ^2,
 $$
 
 其中 $\phi^*$ 是 $\phi$ 的凸共轭（Legendre-Fenchel 变换）。由于
 
 $$
-c(x,y) = \frac{1}{2}\|x-y\|^2 = \frac{1}{2}\|x\|^2 - \langle x, y \rangle + \frac{1}{2}\|y\|^2,
+c(x,y) = \frac{1}{2}\lVert x-y\rVert ^2 = \frac{1}{2}\lVert x\rVert ^2 - \langle x, y \rangle + \frac{1}{2}\lVert y\rVert ^2,
 $$
 
 在最优传输对上 $\phi(x) + \phi^*(y) = \langle x, y \rangle$，从而
 
 $$
-\phi_K(x) + \psi_K(y) = -\langle x, y \rangle = -c(x,y) + \frac{1}{2}\|x\|^2 + \frac{1}{2}\|y\|^2.
+\phi_K(x) + \psi_K(y) = -\langle x, y \rangle = -c(x,y) + \frac{1}{2}\lVert x\rVert ^2 + \frac{1}{2}\lVert y\rVert ^2.
 $$
 
-（符号取决于对偶形式约定；与正文 $\phi(x)+\psi(y)\leq c(x,y)$ 的约定差一个 $\frac{1}{2}\|x\|^2+\frac{1}{2}\|y\|^2$ 的平移。）
+（符号取决于对偶形式约定；与正文 $\phi(x)+\psi(y)\leq c(x,y)$ 的约定差一个 $\frac{1}{2}\lVert x\rVert ^2+\frac{1}{2}\lVert y\rVert ^2$ 的平移。）
 
 **注**：在二次代价下，若 $\phi$ 是 Brenier 势，则其凸共轭 $\phi^*$ 就是对应的 Kantorovich 势 $\psi$，且在最优传输对上满足
 
@@ -68,7 +68,7 @@ $$
 
 ![](https://lgximgs.oss-cn-beijing.aliyuncs.com/images/image-20250928212316955.png)
 
-*由 $c(x,y)=\frac{1}{2}\|x-y\|^2$ 展开，Kantorovich 势取 $\tilde\phi(x)=\phi(x)-\frac{1}{2}\|x\|^2$、$\tilde\psi(y)=\phi^*(y)-\frac{1}{2}\|y\|^2$，满足 $\tilde\phi(x)+\tilde\psi(y)=\langle x,y\rangle$ 于最优对上。
+*由 $c(x,y)=\frac{1}{2}\lVert x-y\rVert ^2$ 展开，Kantorovich 势取 $\tilde\phi(x)=\phi(x)-\frac{1}{2}\lVert x\rVert ^2$、$\tilde\psi(y)=\phi^*(y)-\frac{1}{2}\lVert y\rVert ^2$，满足 $\tilde\phi(x)+\tilde\psi(y)=\langle x,y\rangle$ 于最优对上。
 
 ![](https://lgximgs.oss-cn-beijing.aliyuncs.com/images/image-20250928212149743.png)
 
@@ -78,7 +78,7 @@ $$
 \boxed{T(x) = x + \nabla \phi_K(x)}
 $$
 
-其中 $\phi_K(x) = \phi(x) - \frac{1}{2}\|x\|^2$ 是定义在源空间上的 Kantorovich 势。这与 $T(x)=\nabla\phi(x)$ 等价，因为 $\nabla\phi(x) = x + \nabla\phi_K(x)$。
+其中 $\phi_K(x) = \phi(x) - \frac{1}{2}\lVert x\rVert ^2$ 是定义在源空间上的 Kantorovich 势。这与 $T(x)=\nabla\phi(x)$ 等价，因为 $\nabla\phi(x) = x + \nabla\phi_K(x)$。
 
 
 
@@ -105,13 +105,13 @@ $$
 
 其中 $\phi$ 是 Kantorovich 势（源空间侧）。
 
-*图：**例子**——若 $c(x,y)=\frac{1}{2}\|x-y\|^2$，则 $\nabla_x c = x-y$，代入得*
+*图：**例子**——若 $c(x,y)=\frac{1}{2}\lVert x-y\rVert ^2$，则 $\nabla_x c = x-y$，代入得*
 
 $$
 \nabla \phi(x) = -(x - T(x)) \quad \Longrightarrow \quad T(x) = x + \nabla \phi(x),
 $$
 
-与 Brenier 一节中 $T(x)=x+\nabla\phi_K(x)$ 一致（此时 $\phi_K = \phi - \frac{1}{2}\|x\|^2$）。
+与 Brenier 一节中 $T(x)=x+\nabla\phi_K(x)$ 一致（此时 $\phi_K = \phi - \frac{1}{2}\lVert x\rVert ^2$）。
 
 ---
 

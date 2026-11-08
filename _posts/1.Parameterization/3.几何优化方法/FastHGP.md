@@ -92,7 +92,7 @@ $$
 直接编码 (3) 很繁琐。论文转成等价的**线性约束二次极小化**：
 
 $$
-\min_{z}\ \|Dz\|^2
+\min_{z}\ \lVert Dz\rVert ^2
 \quad\text{s.t.}\quad
 A_{\text{lin}}z=c_{\text{lin}},\qquad
 A_{\text{lin}}=\begin{pmatrix}A_1\\ A_{\text{int}}\end{pmatrix},\
@@ -110,7 +110,7 @@ $$
 $$
 
 **Theorem 6**：$K$ 可逆，(4) 有唯一解。
-*证明骨架*：设 $K\binom{z}{\lambda}=0$。由下块 $z\in\mathcal{N}(A_{\text{lin}})$；若 $z=0$ 则 $\lambda\in\mathcal{N}(A_{\text{lin}}^t)$ 非零，与 $A_{\text{lin}}$ 满秩（Prop 11，附录 B：利用各行稀疏性沿 $\partial S$ 与 $G_s$ 做链式消元）矛盾；若 $z\neq0$，左乘 $z^t$ 使第二项消失，得 $\|Dz\|^2=0$，即 $z\in\mathcal{N}(D)\cap\mathcal{N}(A_{\text{lin}})$——但 $\mathcal{N}(D)$ 只有常向量，而插值条件已排除非零常向量，矛盾。$\square$
+*证明骨架*：设 $K\binom{z}{\lambda}=0$。由下块 $z\in\mathcal{N}(A_{\text{lin}})$；若 $z=0$ 则 $\lambda\in\mathcal{N}(A_{\text{lin}}^t)$ 非零，与 $A_{\text{lin}}$ 满秩（Prop 11，附录 B：利用各行稀疏性沿 $\partial S$ 与 $G_s$ 做链式消元）矛盾；若 $z\neq0$，左乘 $z^t$ 使第二项消失，得 $\lVert Dz\rVert ^2=0$，即 $z\in\mathcal{N}(D)\cap\mathcal{N}(A_{\text{lin}})$——但 $\mathcal{N}(D)$ 只有常向量，而插值条件已排除非零常向量，矛盾。$\square$
 
 **Proposition 7**：KKT 系统的解 $(z,\lambda)$ 中，$z$ 满足**增广 HGP 系统** $A_{\text{aug}}z=\binom{0}{c_{\text{int}}}$。
 *证明骨架*：$K$ 的对应 $\mathring V$ 的行直接给出 (2)；对 $V_s\setminus(C\cup\partial V)$ 的行含 Lagrange 乘子，用 (1) 的 $2k$ 行线性组合消掉乘子后恰好得到 (3)。论文用 Figure 3/4 的度数 2 例子显式演示了 $x_i^0$ 与 $y_i^1$、$y_i^0$ 与 $x_i^1$ 配对消元。
@@ -235,7 +235,7 @@ $\sigma^2$ 是很小的正常数（防退化），$k$ 略小于 1。两式分别
 
 ### 6.3 全局投影
 
-**首次全局投影**（不做法向超平面限制）：求面积加权最小二乘 $\min_c\|W^{1/2}(\tilde Jc-p)\|^2$，正规方程为 $\tilde J^tW\tilde Jc=\tilde J^tWp$，但 $\tilde J^tW\tilde J$ 奇异（2 维解空间）。改用 $\tilde J_1$：
+**首次全局投影**（不做法向超平面限制）：求面积加权最小二乘 $\min_c\lVert W^{1/2}(\tilde Jc-p)\rVert ^2$，正规方程为 $\tilde J^tW\tilde Jc=\tilde J^tWp$，但 $\tilde J^tW\tilde J$ 奇异（2 维解空间）。改用 $\tilde J_1$：
 
 $$
 c=(\tilde J_1^tW_1\tilde J_1)^{-1}\tilde J_1^tW_1\,p
@@ -253,7 +253,7 @@ $$
 
 $\tilde M:=\tilde J_1^tW_1\tilde J_1$，$n_l:=a_l-b_l$。只需一次线性求解（$\tilde M^{-1}\tilde J_1^tW_1$ 可预计算）。
 
-**初始化**：$f_z^i$ 由 frame field 给出，$f_{\bar z}^i=0$；先做一次 (9)，随后在局部投影与 (10) 间交替。**参数**：$k=0.9$，$\sigma^2=0.01$，终止判据 $\|W^{1/2}n_l\|<10^{-4}$（Table 1 显示迭代次数通常个位数，最多 24）。
+**初始化**：$f_z^i$ 由 frame field 给出，$f_{\bar z}^i=0$；先做一次 (9)，随后在局部投影与 (10) 间交替。**参数**：$k=0.9$，$\sigma^2=0.01$，终止判据 $\lVert W^{1/2}n_l\rVert <10^{-4}$（Table 1 显示迭代次数通常个位数，最多 24）。
 
 ### 6.4 无锥 + trivial holonomy：一次线性求解的替代
 
@@ -328,7 +328,7 @@ Observation 2 保证：只在 $T_{cb}$ 上压能量，就能有效降低全网�
 | | HGP [BCW17] | **FastHGP** |
 | :--- | :--- | :--- |
 | 调和约束 | 软约束（二次误差项最小二乘松弛） | **硬约束**（精确落在 $\mathcal{N}(A_{\text{hgp}})$ 内） |
-| 搜索空间 | 全顶点 UV，$2\|V\|$ 维 | $c_{\text{int}}$，$2(\|\partial V\|+\|C\|+n-1)$ 维（+ 虚拟顶点再降维） |
+| 搜索空间 | 全顶点 UV，$2\lVert V\rVert $ 维 | $c_{\text{int}}$，$2(\lVert \partial V\rVert +\lVert C\rVert +n-1)$ 维（+ 虚拟顶点再降维） |
 | 核心求解器 | MOSEK SOCP | 1 次 LU + **选择性求逆** → ATP → Projected Newton |
 | 畸变优化 | 无（靠 SOCP 隐式控制） | $T_{cb}$ 上对称 Dirichlet + Projected Newton，$k$ 平均好 3 倍 |
 | 代价 | 数十次以上线性求解 | $\approx 1$–$2$ 次线性求解 |

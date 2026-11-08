@@ -198,7 +198,7 @@ Crane–Pinkall–Schröder 的 *Spin Transformations of Discrete Surfaces*（SI
 
 ### 5.1 变量与能量骨架
 
-- 变量：每面的旋量（单位四元数，$\|\psi\|=1$）+ 顶点位置（由旋量积分/重建得到）；
+- 变量：每面的旋量（单位四元数，$\lVert \psi\rVert =1$）+ 顶点位置（由旋量积分/重建得到）；
 - 能量：度量约束 $|\psi|^4=g$ 的违反量 + Willmore/弯曲型正则（对应 §3 泛函族中 $\epsilon_1,\epsilon_2,\epsilon_3$ 的配比），以及保证闭形式恰当的周期项；
 - 归一化：$\psi$ 的常数缩放是零方向，必须钉住（如 $\int|\psi|^4=1$），否则能量被整体缩放吃掉（"越缩越小/越大"的退化）。
 

@@ -3,7 +3,7 @@
 **ARAP 的问题**：能量
 
 $$
-\mathcal{D}_{\text{ARAP}}(J) = \|J - R(J)\|_F^2
+\mathcal{D}_{\text{ARAP}}(J) = \lVert J - R(J)\rVert _F^2
 $$
 
 对 shrink 有偏置——无限缩小三角形与适度缩放的畸变相当（论文 Fig. 6），高曲率区域常出现退化或翻转（Fig. 5：Gargoyle 99K 面产生 6K 翻转）。左图对比：ARAP 圆盘参数化出现重叠与高畸变；SLIM 最小化对称 Dirichlet 后无重叠、纹理均匀。
@@ -27,9 +27,9 @@ $A_f$ 为面积权重，$\mathcal{D}$ 为畸变度量。
 [Liu et al. 2008] 交替优化：
 
 - **Local**：$R_f^k = R(J_f(x^{k-1}))$（SVD：$J=USV^T$，取 $R=UV^T$）
-- **Global**：$\displaystyle x^k = \arg\min_x \sum_f A_f \|J_f(x) - R_f^k\|_F^2 + \lambda \|x - x^{k-1}\|^2$
+- **Global**：$\displaystyle x^k = \arg\min_x \sum_f A_f \lVert J_f(x) - R_f^k\rVert _F^2 + \lambda \lVert x - x^{k-1}\rVert ^2$
 
-ARAP 的二次代理 $P_R(J)=\|J-R\|_F^2$ 满足 Majorizer、梯度匹配、最近极小点三条性质（与 [AQP](几何优化-AQP.md) §3 相同），每步保证能量下降，但**不保证无翻转**。
+ARAP 的二次代理 $P_R(J)=\lVert J-R\rVert _F^2$ 满足 Majorizer、梯度匹配、最近极小点三条性质（与 [AQP](几何优化-AQP.md) §3 相同），每步保证能量下降，但**不保证无翻转**。
 
 ### 2.2 对称 Dirichlet（SLIM 默认）
 
@@ -37,7 +37,7 @@ ARAP 的二次代理 $P_R(J)=\|J-R\|_F^2$ 满足 Majorizer、梯度匹配、最�
 
 $$
 \mathcal{D}(J_f) = \begin{cases}
-\|J_f\|_F^2 + \|J_f^{-1}\|_F^2 & \det(J_f) \geq 0 \\
+\lVert J_f\rVert _F^2 + \lVert J_f^{-1}\rVert _F^2 & \det(J_f) \geq 0 \\
 \infty & \det(J_f) < 0
 \end{cases}
 $$
@@ -59,7 +59,7 @@ SLIM 的 local/global 框架来自 ARAP，但对称 Dirichlet 等能量**没有*
 **Greedy Stiffening** [Bommes et al. 2009] 在 ARAP 的 global 步中，对每个三角形引入标量权重 $w_f$，最小化
 
 $$
-\min_x \sum_{f \in F} A_f\, w_f^k \,\|J_f(x) - R_f^k\|_F^2
+\min_x \sum_{f \in F} A_f\, w_f^k \,\lVert J_f(x) - R_f^k\rVert _F^2
 $$
 
 思路：翻转或接近退化的元素加大 $w_f$，迫使优化器优先"修好"它们。这是**启发式**——加重一个元素的权重可能使邻域元素翻转，二者反复拉锯，算法可能永不收敛；且不保证每步产生下降方向（论文 Fig. 4）。
@@ -67,7 +67,7 @@ $$
 **IRLS**（Iteratively Reweighted Least Squares）[Pighin & Lewis 2007; Yoshizawa et al. 2004] 用另一套标量更新规则，使代理在数值上**局部匹配能量比值**而非梯度。对 $L^p$ 范数，取
 
 $$
-w_f^k = \frac{\mathcal{D}(J_f(x^{k-1}))}{\|J_f(x^{k-1}) - R_f^k\|_F^2}
+w_f^k = \frac{\mathcal{D}(J_f(x^{k-1}))}{\lVert J_f(x^{k-1}) - R_f^k\rVert _F^2}
 $$
 
 直觉：若某三角形几乎退化，分子（对称 Dirichlet）很大而分母（ARAP 代理）不大，则下一步加大 $w_f$ 以惩罚该元素；若某元素被过度缩放，$w_f < 1$ 减轻代理对它的惩罚。
@@ -78,7 +78,7 @@ SLIM 作者将 IRLS 规则嵌入自己的 local/global 框架做对比。实验�
 
 论文指出，标量 $w_f$ 的表达能力不足。考虑一个三角形 Jacobian 沿**一个轴**严重拉伸、沿**另一轴**几乎不变：
 
-- 标量权重只能对整个 $\|J-R\|_F^2$ 统一缩放，**无法区分两个奇异方向**；
+- 标量权重只能对整个 $\lVert J-R\rVert _F^2$ 统一缩放，**无法区分两个奇异方向**；
 - 两个轴被等同惩罚，proxy 与真实能量 $\mathcal{D}(J)$ 的梯度方向不一致；
 - 下降方向失真，在高曲率/高畸变区域尤其明显。
 
@@ -86,22 +86,22 @@ SLIM 作者将 IRLS 规则嵌入自己的 local/global 框架做对比。实验�
 
 ### 3.3 矩阵加权代理：为匹配梯度而设计
 
-SLIM 将 ARAP 代理 $P_R(J)=\|J-R\|_F^2$ 推广为
+SLIM 将 ARAP 代理 $P_R(J)=\lVert J-R\rVert _F^2$ 推广为
 
 $$
-P_{R,W}(J) = \|W(J - R)\|_F^2
+P_{R,W}(J) = \lVert W(J - R)\rVert _F^2
 $$
 
 $W$ 是仿射变换：在 $(J-R)$ 的不同方向上施加不同缩放，使代理在 $J^k$ 处与 $\mathcal{D}(J)$ **梯度一致**（而非仅能量值接近）：
 
 $$
-\nabla_J \|W(J-R)\|_F^2 \Big|_{J=J^k} = \nabla_J \mathcal{D}(J) \Big|_{J=J^k}
+\nabla_J \lVert W(J-R)\rVert _F^2 \Big|_{J=J^k} = \nabla_J \mathcal{D}(J) \Big|_{J=J^k}
 $$
 
 展开左边（记 $S = J-R$）：
 
 $$
-\nabla_J \|WS\|_F^2 = \nabla_J \,\mathrm{tr}(W^T W S S^T) = (W^T W + W W^T)\, S
+\nabla_J \lVert WS\rVert _F^2 = \nabla_J \,\mathrm{tr}(W^T W S S^T) = (W^T W + W W^T)\, S
 $$
 
 令 $S = J^k - R^k$ 可逆（否则用伪逆），得
@@ -150,13 +150,13 @@ $$
 对称 Dirichlet 在退化/翻转处为 $\infty$，**不存在**满足全局 Majorizer 的二次代理。SLIM 只要求**梯度匹配**与**最近极小点**（投影到最近旋转 $R$）一致。上节已给出从标量到矩阵的动机，这里汇总公式。
 
 $$
-P_{R,W}(J) = \|W(J - R)\|_F^2
+P_{R,W}(J) = \lVert W(J - R)\rVert _F^2
 $$
 
 给定当前 $J^k$、$R^k$，求 $W^k$ 使（完整推导见 §3.3）：
 
 $$
-\nabla_J \|W(J - R)\|_F^2 \Big|_{J=J^k} = \nabla_J \mathcal{D}(J) \Big|_{J=J^k}
+\nabla_J \lVert W(J - R)\rVert _F^2 \Big|_{J=J^k} = \nabla_J \mathcal{D}(J) \Big|_{J=J^k}
 $$
 
 推导（设 $J-R$ 可逆，否则用伪逆；细节见 §3.3）：

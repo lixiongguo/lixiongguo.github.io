@@ -55,7 +55,7 @@ SVD：$F=U\Sigma V^\top$，$\Sigma=\mathrm{diag}(\sigma_1,\ldots,\sigma_d)$。�
 $$
 \boxed{
 I_1 = \mathrm{tr}(S)=\sum_i \sigma_i,\quad
-I_2 = \|S\|_F^2 = \|F\|_F^2 = \sum_i \sigma_i^2,\quad
+I_2 = \lVert S\rVert _F^2 = \lVert F\rVert _F^2 = \sum_i \sigma_i^2,\quad
 I_3 = \det(S)=\prod_i \sigma_i
 }
 \tag{2}
@@ -64,7 +64,7 @@ $$
 | 不变量 | 含义 | 典型能量中的角色 |
 | :--- | :--- | :--- |
 | $I_1$ | 拉伸之和 | ARAP、Co-rotational 的 **线性项** $\mathrm{tr}(S)$ |
-| $I_2$ | Frobenius 范数平方 | Dirichlet $\frac12\|F\|^2$、最小二乘畸变 |
+| $I_2$ | Frobenius 范数平方 | Dirichlet $\frac12\lVert F\rVert ^2$、最小二乘畸变 |
 | $I_3$ | 体积（有符号） | 行列式、MIPS 分母 |
 
 2D 约束：$I_2 = I_1^2 - 2I_3$，但推导中仍保留三个不变量以统一 2D/3D。
@@ -75,7 +75,7 @@ $$
 \sigma^2 - I_1\sigma + I_3 = 0.
 $$
 
-> **记号对照**：部分旧笔记用 $I_1^{\mathrm{CG}}=\|F\|^2$、$I_2^{\mathrm{CG}}=\sigma_1\sigma_2$（Cauchy–Green 风格）。本文一律采用上式 **$S$-不变量**（Smith et al. 2019）。
+> **记号对照**：部分旧笔记用 $I_1^{\mathrm{CG}}=\lVert F\rVert ^2$、$I_2^{\mathrm{CG}}=\sigma_1\sigma_2$（Cauchy–Green 风格）。本文一律采用上式 **$S$-不变量**（Smith et al. 2019）。
 
 ---
 
@@ -147,7 +147,7 @@ $$
 
 3D：三个 twist $\mathbf{t}_i$，特征值 $2/(\sigma_j+\sigma_k)$（$(i,j,k)$ 轮换）。
 
-### 3.2 $I_2 = \|F\|_F^2$
+### 3.2 $I_2 = \lVert F\rVert _F^2$
 
 $\partial I_2/\partial \mathbf{f} = 2\mathbf{f}$，故
 
@@ -255,14 +255,14 @@ $\mathbf{d}_2$ 的特征值将 $\sigma_1\leftrightarrow\sigma_2$ 互换即可。
 ### 5.1 用 $S$-不变量重写
 
 $$
-\Psi_{\mathrm{ARAP}} = \|F-R\|_F^2
-= \|F\|_F^2 - 2\,\mathrm{tr}(S) + \|R\|_F^2
+\Psi_{\mathrm{ARAP}} = \lVert F-R\rVert _F^2
+= \lVert F\rVert _F^2 - 2\,\mathrm{tr}(S) + \lVert R\rVert _F^2
 = I_2 - 2I_1 + d^2,
 \quad d=2\ \text{（2D）}.
 \tag{14}
 $$
 
-其中 $\|R\|_F^2=d$ 为常数，不影响 Hessian。
+其中 $\lVert R\rVert _F^2=d$ 为常数，不影响 Hessian。
 
 一阶导：$\Psi_1=-2$，$\Psi_2=1$，$\Psi_3=0$；二阶导全为零。
 
@@ -397,7 +397,7 @@ repeat until ‖∇Ψ‖ < tol:
 
 | 步骤 | 内容 |
 | :--- | :--- |
-| 不变量 | $I_1=\mathrm{tr}(S)$，$I_2=\|F\|^2$，$I_3=\det(S)$ |
+| 不变量 | $I_1=\mathrm{tr}(S)$，$I_2=\lVert F\rVert ^2$，$I_3=\det(S)$ |
 | Hessian 展开 | 式 (4)：不变量 Hessian + 外积项 |
 | 闭式一半 | twist $\mathbf{t}$、flip $\mathbf{l}$ 及 $\lambda$（式 10–11） |
 | 剩余 | scaling 矩阵 $\mathbf{A}$；ARAP 解耦，MIPS 二次方程 |

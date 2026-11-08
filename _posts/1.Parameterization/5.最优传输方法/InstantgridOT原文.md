@@ -50,7 +50,7 @@ $$
 其中 $J_T$ 是 $T$ 的 Jacobian 矩阵。寻求最小化 L² 传输代价的映射：
 
 $$
-c(T) = \int_U \|x - T(x)\|^2 \, u(x) \, dx. \quad (6)
+c(T) = \int_U \lVert x - T(x)\rVert ^2 \, u(x) \, dx. \quad (6)
 $$
 
 Brenier 定理保证该问题存在唯一最小化映射，且可写为某个凸标量势的梯度：
@@ -90,7 +90,7 @@ $$
 $\psi$ 与原始凸势 $\phi$ 的关系为：
 
 $$
-\phi(x) = \frac{1}{2}\|x\|^2 + \psi(x),
+\phi(x) = \frac{1}{2}\lVert x\rVert ^2 + \psi(x),
 $$
 
 对应的 Hessian 关系（在 2D 下）：
@@ -463,7 +463,7 @@ $$
 因此误差平方：
 
 $$
-E(t)=\|r_k+b t+a t^2\|^2
+E(t)=\lVert r_k+b t+a t^2\rVert ^2
 $$
 
 是四次多项式。代码在 `compute_1D_problem_parameters()` 中求每个 cell 的 $a,b$，然后在 `solve_1D_problem()` 中构造四次多项式系数：

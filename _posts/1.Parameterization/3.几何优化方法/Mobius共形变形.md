@@ -144,7 +144,7 @@ $$
 理想离散共形 = 顶点一圈内**单一** Möbius $\Leftrightarrow$ 邻面角倒数相等。能量（ED，2D 无约束形式）：
 
 $$
-E_{\mathrm{AMAP}}=\sum_{ik\in E}\|w_{ik}-Y_i z_{ik} Y_k\|^2,
+E_{\mathrm{AMAP}}=\sum_{ik\in E}\lVert w_{ik}-Y_i z_{ik} Y_k\rVert ^2,
 $$
 
 并加线性手柄约束 $w_i=w_i^*$。
@@ -197,7 +197,7 @@ $\Gamma_{ik}=1$ 表示两边为同一 Möbius；$|\Gamma|$、$\arg\Gamma$ 分别
 $$
 E_{\text{AMAP,ED}}^{2D}=\sum_{(i,k)\in E}\left|\,w_{ik}-Y_i z_{ik}Y_k\,\right|^2,
 \qquad
-E_{\text{AMAP,ED}}^{3D}=\sum_{(i,k)\in E}\left\|\,w_{ik}-Y_i q_{ik}Y_k\,\right\|^2
+E_{\text{AMAP,ED}}^{3D}=\sum_{(i,k)\in E}\left\lVert \,w_{ik}-Y_i q_{ik}Y_k\,\right\rVert ^2
 $$
 
 其中 $w_{ik}=w_k-w_i$，2D 用复数乘法，3D 用四元数乘法。
@@ -205,7 +205,7 @@ $$
 反演控制项（论文中的 $E_{\text{INV}}$）：
 
 $$
-E_{\text{INV}}=\alpha_{\text{INV}}\sum_{(i,k)\in E}\|Y_i-Y_k\|^2
+E_{\text{INV}}=\alpha_{\text{INV}}\sum_{(i,k)\in E}\lVert Y_i-Y_k\rVert ^2
 $$
 
 位置约束（硬约束写法）：
@@ -240,15 +240,15 @@ $$
 - **DCError**（离散共形软约束，标量残差）  
   代码写成
   $$
-  r^{\text{DC}}_{ik}= \|w_j-w_i\|^2-\|\overline{Y_i}\,q_{ij}\,Y_j\|^2
+  r^{\text{DC}}_{ik}= \lVert w_j-w_i\rVert ^2-\lVert \overline{Y_i}\,q_{ij}\,Y_j\rVert ^2
   $$
   并乘 `DCFactor`。这等价于“长度交比一致”在边上的软约束版本。
 
 总目标就是最小化这些残差平方和（省略常数）：
 
 $$
-\min \sum_{ik}\|r^{\text{AMAP}}_{ik}\|^2
- + \lambda_{\text{inv}}\sum_{ik}\|r^{\text{INV}}_{ik}\|^2
+\min \sum_{ik}\lVert r^{\text{AMAP}}_{ik}\rVert ^2
+ + \lambda_{\text{inv}}\sum_{ik}\lVert r^{\text{INV}}_{ik}\rVert ^2
  + \lambda_{\text{dc}}\sum_{ik}(r^{\text{DC}}_{ik})^2.
 $$
 

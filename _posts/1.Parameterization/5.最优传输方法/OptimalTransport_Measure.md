@@ -64,7 +64,7 @@ $\Delta_{n-1}$ 为标准单纯形。解 (1) 且 $\mathcal{M}=\mathcal{M}_{a,n}$ 
 对 $\nu\in\mathcal{M}_{a,n}$，Monge 型传输计划 $T:\Omega\to\{\mathbf{x}[1],\ldots,\mathbf{x}[n]\}$ 满足 $\mu(T^{-1}(\mathbf{x}[i]))=\mathbf{w}[i]$。则
 
 $$
-W_2^2(\mu,\nu)=\inf_{T\in\mathcal{T}(\mathbf{x},\mathbf{w})}\int_\Omega \|x-T(x)\|_2^2\,\mathrm{d}\mu(x).
+W_2^2(\mu,\nu)=\inf_{T\in\mathcal{T}(\mathbf{x},\mathbf{w})}\int_\Omega \lVert x-T(x)\rVert _2^2\,\mathrm{d}\mu(x).
 \tag{4}
 $$
 
@@ -111,7 +111,7 @@ $$
 传输代价（对任意剖分 $\mathcal{V}=\{V_i\}$）为
 
 $$
-E(X,\mathcal{V})=\sum_{i}\int_{V_i}\rho(x)\,\|x-x_i\|_2^2\,\mathrm{d}x.
+E(X,\mathcal{V})=\sum_{i}\int_{V_i}\rho(x)\,\lVert x-x_i\rVert _2^2\,\mathrm{d}x.
 \tag{27a}
 $$
 
@@ -212,9 +212,9 @@ $$
 
 $$
 \Pi^{\Sigma_k}_{\mathbf{X}}(\mathbf{x}_0)
-:=\arg\min_{\mathbf{x}\in\mathbf{X}}\|\mathbf{x}-\mathbf{x}_0\|^2_{\Sigma_k},
+:=\arg\min_{\mathbf{x}\in\mathbf{X}}\lVert \mathbf{x}-\mathbf{x}_0\rVert ^2_{\Sigma_k},
 \qquad
-\|\mathbf{x}-\mathbf{x}_0\|^2_{\Sigma_k}
+\lVert \mathbf{x}-\mathbf{x}_0\rVert ^2_{\Sigma_k}
 =\langle\Sigma_k(\mathbf{x}-\mathbf{x}_0),(\mathbf{x}-\mathbf{x}_0)\rangle.
 $$
 
@@ -263,7 +263,7 @@ x̂ ← x_{N_it},  ŵ ← w_{N_it}
 $$
 \mathcal{L}_i(\boldsymbol{\psi},\mathbf{x})
 =\Bigl\{x\in\Omega:\forall j\neq i,\;
-\|x-\mathbf{x}[i]\|^2-\boldsymbol{\psi}[i]\le \|x-\mathbf{x}[j]\|^2-\boldsymbol{\psi}[j]\Bigr\}.
+\lVert x-\mathbf{x}[i]\rVert ^2-\boldsymbol{\psi}[i]\le \lVert x-\mathbf{x}[j]\rVert ^2-\boldsymbol{\psi}[j]\Bigr\}.
 \tag{11}
 $$
 
@@ -290,7 +290,7 @@ $$
 $$
 g(\boldsymbol{\psi},\mathbf{x},\mathbf{w})
 =\sum_{i=1}^{n}\int_{\mathcal{L}_i(\boldsymbol{\psi},\mathbf{x})}
-\bigl(\|\mathbf{x}[i]-x\|^2-\boldsymbol{\psi}[i]\bigr)\,\mathrm{d}\mu(x)
+\bigl(\lVert \mathbf{x}[i]-x\rVert ^2-\boldsymbol{\psi}[i]\bigr)\,\mathrm{d}\mu(x)
 +\sum_{i=1}^{n}\boldsymbol{\psi}[i]\,\mathbf{w}[i].
 \tag{14}
 $$
@@ -309,7 +309,7 @@ $$
 
 $$
 \frac{\partial^2 g}{\partial\boldsymbol{\psi}_i\partial\boldsymbol{\psi}_j}
-=\int_{\partial\mathcal{L}_i\cap\partial\mathcal{L}_j}\frac{\mathrm{d}\mu(x)}{\|\mathbf{x}[i]-\mathbf{x}[j]\|},
+=\int_{\partial\mathcal{L}_i\cap\partial\mathcal{L}_j}\frac{\mathrm{d}\mu(x)}{\lVert \mathbf{x}[i]-\mathbf{x}[j]\rVert },
 \tag{16}
 $$
 
@@ -322,12 +322,12 @@ $$
 
 确定。Hessian 结构与 [Levy et al. 2015] 半离散 OT 笔记一致：相邻 Laguerre 面共享时非零。
 
-由 Gershgorin 圆盘定理，Hessian 最小特征值有下界 $-n\eta\|\rho\|_\infty\mathrm{diam}(\Omega)$，其中 $\eta=1/\min_{i\neq j}\|\mathbf{x}[i]-\mathbf{x}[j]\|$。
+由 Gershgorin 圆盘定理，Hessian 最小特征值有下界 $-n\eta\lVert \rho\rVert _\infty\mathrm{diam}(\Omega)$，其中 $\eta=1/\min_{i\neq j}\lVert \mathbf{x}[i]-\mathbf{x}[j]\rVert $。
 
 **二阶可微性的证明要点**：若某 Laguerre 单元测度为零，则其为线段或点。在一般位置假设下，点 $x$ 满足至少 3 个等式
 
 $$
-\|x-\mathbf{x}[i]\|^2-\boldsymbol{\psi}[i]=\|x-\mathbf{x}[j_k]\|^2-\boldsymbol{\psi}[j_k],
+\lVert x-\mathbf{x}[i]\rVert ^2-\boldsymbol{\psi}[i]=\lVert x-\mathbf{x}[j_k]\rVert ^2-\boldsymbol{\psi}[j_k],
 \tag{18}
 $$
 
@@ -337,10 +337,10 @@ $$
 
 $$
 \bigl|\mu(\mathcal{L}_i(\boldsymbol{\psi}+t\Delta,\mathbf{x}))-\mu(\mathcal{L}_i(\boldsymbol{\psi},\mathbf{x}))\bigr|
-\le t(n-1)\|\rho\|_\infty\eta\,\mathrm{diam}(\Omega),
+\le t(n-1)\lVert \rho\rVert _\infty\eta\,\mathrm{diam}(\Omega),
 $$
 
-求和得 $\|\nabla_{\boldsymbol{\psi}}g(\boldsymbol{\psi}+t\Delta)-\nabla_{\boldsymbol{\psi}}g(\boldsymbol{\psi})\|_2\le t n^{3/2}\|\rho\|_\infty\eta\,\mathrm{diam}(\Omega)$（偏悲观）。
+求和得 $\lVert \nabla_{\boldsymbol{\psi}}g(\boldsymbol{\psi}+t\Delta)-\nabla_{\boldsymbol{\psi}}g(\boldsymbol{\psi})\rVert _2\le t n^{3/2}\lVert \rho\rVert _\infty\eta\,\mathrm{diam}(\Omega)$（偏悲观）。
 
 **Proposition 2**：若 $\min\rho>0$ 且站点两两不同，(13) 的极大化子在加常数意义下唯一；极大点附近 $g$ 强凹。
 
@@ -355,7 +355,7 @@ $$
 OTA 采用**正则化 Newton**（类似 Levenberg–Marquardt，但正则参数自动选取）：
 
 $$
-\boldsymbol{\psi}_{k+1}=\boldsymbol{\psi}_k-t_k\bigl(A(\boldsymbol{\psi}_k)+\|\nabla_{\boldsymbol{\psi}}g(\boldsymbol{\psi}_k)\|_2\,\mathrm{Id}\bigr)^{-1}\nabla_{\boldsymbol{\psi}}g(\boldsymbol{\psi}_k),
+\boldsymbol{\psi}_{k+1}=\boldsymbol{\psi}_k-t_k\bigl(A(\boldsymbol{\psi}_k)+\lVert \nabla_{\boldsymbol{\psi}}g(\boldsymbol{\psi}_k)\rVert _2\,\mathrm{Id}\bigr)^{-1}\nabla_{\boldsymbol{\psi}}g(\boldsymbol{\psi}_k),
 \tag{19}
 $$
 
@@ -370,7 +370,7 @@ $$
 
 在**零均值**子空间上求解以保证唯一性。**Proposition 3**：Wolfe 线搜索下 (19) **全局收敛**到 (13) 的唯一极大点，且局部**二次收敛**——此前结果多为局部收敛 [Levy et al.]。
 
-**设计 rationale**：去掉 $\|\nabla g\|\mathrm{Id}$ 则为纯 Newton；加入后，远离最优解时 $\|\nabla g\|$ 大 → 接近梯度下降；接近最优时 $\|\nabla g\|\to 0$ → 接近阻尼 Newton。
+**设计 rationale**：去掉 $\lVert \nabla g\rVert \mathrm{Id}$ 则为纯 Newton；加入后，远离最优解时 $\lVert \nabla g\rVert $ 大 → 接近梯度下降；接近最优时 $\lVert \nabla g\rVert \to 0$ → 接近阻尼 Newton。
 
 实践上可结合 [Merigot 2011] 的多尺度初始化；亦可用标准 LM $\boldsymbol{\psi}_{k+1}=\boldsymbol{\psi}_k-(A+c_k\mathrm{Id})^{-1}\nabla g$，$c_k$ 由 Wolfe 准则调节，收敛率相近。
 
@@ -481,30 +481,30 @@ $$
 有界**速度**与**加速度**（车辆模型）：
 
 $$
-\|(A_1\mathbf{x})[i]\|_2\le\alpha_1,\quad\forall i,
+\lVert (A_1\mathbf{x})[i]\rVert _2\le\alpha_1,\quad\forall i,
 \tag{29}
 $$
 
 $$
-\|(A_2\mathbf{x})[i]\|_2\le\alpha_2,\quad\forall i.
+\lVert (A_2\mathbf{x})[i]\rVert _2\le\alpha_2,\quad\forall i.
 \tag{30}
 $$
 
 $$
-\mathbf{X}=\{\mathbf{x}\in\Omega^n:\|A_1\mathbf{x}\|_{\infty,2}\le\alpha_1,\;\|A_2\mathbf{x}\|_{\infty,2}\le\alpha_2\}.
+\mathbf{X}=\{\mathbf{x}\in\Omega^n:\lVert A_1\mathbf{x}\rVert _{\infty,2}\le\alpha_1,\;\lVert A_2\mathbf{x}\rVert _{\infty,2}\le\alpha_2\}.
 \tag{31}
 $$
 
-$\|\mathbf{y}\|_{\infty,p}=\sup_i\|\mathbf{y}[i]\|_p$。集合 (31) **凸**。
+$\lVert \mathbf{y}\rVert _{\infty,p}=\sup_i\lVert \mathbf{y}[i]\rVert _p$。集合 (31) **凸**。
 
 #### 几何约束（非凸）
 
-连续情形：弧长参数曲线 $s:[0,T]\to\mathbb{R}^2$，$\|\dot{s}\|=1$，长度 $T$，曲率 $\kappa(t)=\|\ddot{s}(t)\|$。
+连续情形：弧长参数曲线 $s:[0,T]\to\mathbb{R}^2$，$\lVert \dot{s}\rVert =1$，长度 $T$，曲率 $\kappa(t)=\lVert \ddot{s}(t)\rVert $。
 
 **弧长均匀参数化**（离散）：
 
 $$
-\|(A_1\mathbf{x})[i]\|_2=\alpha_1,\quad\forall i.
+\lVert (A_1\mathbf{x})[i]\rVert _2=\alpha_1,\quad\forall i.
 \tag{32}
 $$
 
@@ -513,14 +513,14 @@ $$
 **有界曲率**：
 
 $$
-\|(A_2\mathbf{x})[i]\|_2\le\alpha_2,\quad\forall i.
+\lVert (A_2\mathbf{x})[i]\rVert _2\le\alpha_2,\quad\forall i.
 \tag{33}
 $$
 
 在 (32) 成立时，对 $2\le i\le n-1$ 有推导
 
 $$
-\|(A_2\mathbf{x})[i]\|_2^2
+\lVert (A_2\mathbf{x})[i]\rVert _2^2
 =2\alpha_1^2\bigl(1-\cos\theta_i\bigr),
 $$
 
@@ -534,7 +534,7 @@ $$
 固定长度 + 有界曲率：
 
 $$
-\mathbf{X}=\{\mathbf{x}\in\Omega^n:\|(A_1\mathbf{x})[i]\|_2=\alpha_1,\;\|A_2\mathbf{x}\|_{\infty,2}\le\alpha_2\}.
+\mathbf{X}=\{\mathbf{x}\in\Omega^n:\lVert (A_1\mathbf{x})[i]\rVert _2=\alpha_1,\;\lVert A_2\mathbf{x}\rVert _{\infty,2}\le\alpha_2\}.
 \tag{35}
 $$
 
@@ -560,7 +560,7 @@ $$
 例如有界速度 (29) 对应
 
 $$
-\mathbf{Y}_1=\{\mathbf{y}\in\mathbb{R}^{n\times 2}:\|\mathbf{y}[i]\|_2\le\alpha_1,\;\forall i\}.
+\mathbf{Y}_1=\{\mathbf{y}\in\mathbb{R}^{n\times 2}:\lVert \mathbf{y}[i]\rVert _2\le\alpha_1,\;\forall i\}.
 \tag{38}
 $$
 
@@ -573,7 +573,7 @@ $$
 $$
 \Pi_{\mathbf{X}}(\mathbf{z})
 =\arg\min_{\substack{A_k\mathbf{x}\in\mathbf{Y}_k\\ B\mathbf{x}=\mathbf{b}}}
-\tfrac{1}{2}\|\mathbf{x}-\mathbf{z}\|_2^2.
+\tfrac{1}{2}\lVert \mathbf{x}-\mathbf{z}\rVert _2^2.
 \tag{39}
 $$
 
@@ -592,12 +592,12 @@ $$
 
 $$
 \min_{\substack{B\mathbf{x}=\mathbf{b}\\ A\mathbf{x}=\mathbf{y}\\ \mathbf{y}\in\mathbf{Y}}}
-\tfrac{1}{2}\|\mathbf{x}-\mathbf{z}\|_2^2
+\tfrac{1}{2}\lVert \mathbf{x}-\mathbf{z}\rVert _2^2
 =\min_{A\mathbf{x}=\mathbf{y}} f_1(\mathbf{x})+f_2(\mathbf{y}),
 \tag{42}
 $$
 
-其中 $f_1(\mathbf{x})=\tfrac12\|\mathbf{x}-\mathbf{z}\|_2^2+\iota_{\mathbf{L}}(\mathbf{x})$，$\mathbf{L}=\{\mathbf{x}:B\mathbf{x}=\mathbf{b}\}$；$f_2(\mathbf{y})=\iota_{\mathbf{Y}}(\mathbf{y})$，
+其中 $f_1(\mathbf{x})=\tfrac12\lVert \mathbf{x}-\mathbf{z}\rVert _2^2+\iota_{\mathbf{L}}(\mathbf{x})$，$\mathbf{L}=\{\mathbf{x}:B\mathbf{x}=\mathbf{b}\}$；$f_2(\mathbf{y})=\iota_{\mathbf{Y}}(\mathbf{y})$，
 
 $$
 \iota_{\mathbf{Y}}(\mathbf{y})=
@@ -624,7 +624,7 @@ $\mathbf{x}$-步用**共轭梯度**求解。$\mathbf{y}$-步为逐约束欧氏�
 - **凸 (31)**：ADMM 线性收敛 [Giselsson & Boyd]。
 - **非凸 (35)**：理论开放 [Li & Pong]，实践中收敛到临界点。
 
-**参数选取**：$\gamma_i=\|A_i\|_2$（谱范数）经验稳定；$\beta$ 手动调一次后固定。
+**参数选取**：$\gamma_i=\lVert A_i\rVert _2$（谱范数）经验稳定；$\beta$ 手动调一次后固定。
 
 ### 8.3 投影算例（Fig. 4）
 
@@ -644,14 +644,14 @@ $\mathbf{x}$-步用**共轭梯度**求解。$\mathbf{y}$-步为逐约束欧氏�
 
 $$
 \forall(\mathbf{x}_1,\mathbf{x}_2),\quad
-\|\nabla F(\mathbf{x}_1)-\nabla F(\mathbf{x}_2)\|_{\Sigma^{-1}}
-\le L\|\mathbf{x}_1-\mathbf{x}_2\|_{\Sigma},
+\lVert \nabla F(\mathbf{x}_1)-\nabla F(\mathbf{x}_2)\rVert _{\Sigma^{-1}}
+\le L\lVert \mathbf{x}_1-\mathbf{x}_2\rVert _{\Sigma},
 \tag{46}
 $$
 
 且 $\mathbf{X}$ 紧或 $F$ 强制。则步长 $s_k=1/L$ 时 Algorithm 1 收敛到 $F$ 的临界点。
 
-**应用限制**：定理要求 $\Sigma_k$ 常数 → 权重 $\mathbf{w}$ 需预先固定。由 (23)，$\nabla_{\mathbf{x}}F$ 的 Lipschitz 常数含 $\min_{i\neq j}\|\mathbf{x}[i]-\mathbf{x}[j]\|^{-1}$，**不能**对 $\mathbf{x}$ 一致有界 → 仅有**局部**理论。
+**应用限制**：定理要求 $\Sigma_k$ 常数 → 权重 $\mathbf{w}$ 需预先固定。由 (23)，$\nabla_{\mathbf{x}}F$ 的 Lipschitz 常数含 $\min_{i\neq j}\lVert \mathbf{x}[i]-\mathbf{x}[j]\rVert ^{-1}$，**不能**对 $\mathbf{x}$ 一致有界 → 仅有**局部**理论。
 
 **无 $\Pi$-步**（$\mathbf{X}=\Omega^n$）：临界点处梯度 1-Lipschitz（centroidal tessellation）[Du et al. Prop. 6.3]，故 $s_k=1$、$\Sigma_k$ 如 (25) 时可在 $\mathbf{x}^*$ 邻域内证明收敛。邻域大小依赖最优 Laguerre 剖分几何；数值上数百次随机初始化均收敛到视觉良好的驻点。
 

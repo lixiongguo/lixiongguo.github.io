@@ -104,13 +104,13 @@ $$
 \nabla\theta^T=\omega\vec K,\qquad \nabla\phi^T=\omega\vec K^\perp.
 $$
 
-- **归一化**：梯度不应依赖输入场的幅值。求**拟等距**时取 $\|\vec K\|=\|\vec K^\perp\|=1$；若要减少奇异点，则先归一化再按 §4.1 的 curl 校正缩放（结果不再等距但仍**共形**）。
+- **归一化**：梯度不应依赖输入场的幅值。求**拟等距**时取 $\lVert \vec K\rVert =\lVert \vec K^\perp\rVert =1$；若要减少奇异点，则先归一化再按 §4.1 的 curl 校正缩放（结果不再等距但仍**共形**）。
 - **$\omega$ 控制 chart 大小**：因已归一化，$\omega$ 决定 $\theta,\phi$ 的周期；chart 边界取 $\theta=2k\pi,\ \phi=2k\pi$ 等值线，故 $\omega$ 直接定 chart 尺寸（论文取**平均边长的 10 倍**）。$\omega$ 过大可能产生非圆盘 chart，可由 Euler-Poincaré 特征检测并自动减小 $\omega$。
 
 由于对任意标量场 $\rho$ 有 $\operatorname{curl}(\nabla\rho)=0$，式 (4) 有解仅当 $\operatorname{curl}\vec K=\operatorname{curl}\vec K^\perp=0$。一般输入未必无旋，故弱化为**最小化能量**：
 
 $$
-F=\int_S\Big(\|\nabla\theta^T-\omega\vec K\|^2+\|\nabla\phi^T-\omega\vec K^\perp\|^2\Big)\,dS.
+F=\int_S\Big(\lVert \nabla\theta^T-\omega\vec K\rVert ^2+\lVert \nabla\phi^T-\omega\vec K^\perp\rVert ^2\Big)\,dS.
 $$
 
 难点在于：如何在**不显式处理平移/旋转自由度**的前提下表达这种对齐。下面先引入平移不变（§2.2），再加旋转不变（§2.3）。
@@ -120,16 +120,16 @@ $$
 由附录 A，可用 $F^*$ 替代 $F$（同极小点），其中把每面 $\vec K$ 换成面均值 $\vec K_T$，并因 $\nabla\theta^T,\nabla\phi^T$ 面内常值而写成面求和：
 
 $$
-F^*=\sum_T\Big(\|\nabla\theta^T-\omega\vec K_T\|^2+\|\nabla\phi^T-\omega\vec K_T^\perp\|^2\Big)A_T.
+F^*=\sum_T\Big(\lVert \nabla\theta^T-\omega\vec K_T\rVert ^2+\lVert \nabla\phi^T-\omega\vec K_T^\perp\rVert ^2\Big)A_T.
 $$
 
-直接对 $F_T$ 引入平移不变较难，故先看**沿边 $\vec e_i$** 的能量（以 $\theta$ 为例，$i\in\{1,2,3\}$，$\oplus$ 表示模 3 加）。沿边梯度为 $(\theta_{i\oplus2}-\theta_{i\oplus1})/\|\vec e_i\|$，$\vec K$ 沿边投影为 $\vec K\cdot\vec e_i/\|\vec e_i\|$：
+直接对 $F_T$ 引入平移不变较难，故先看**沿边 $\vec e_i$** 的能量（以 $\theta$ 为例，$i\in\{1,2,3\}$，$\oplus$ 表示模 3 加）。沿边梯度为 $(\theta_{i\oplus2}-\theta_{i\oplus1})/\lVert \vec e_i\rVert $，$\vec K$ 沿边投影为 $\vec K\cdot\vec e_i/\lVert \vec e_i\rVert $：
 
 $$
-F^\theta_{e_i}=\int_{\vec e_i}\big(\theta_{i\oplus2}-\theta_{i\oplus1}-\vec K\cdot\vec e_i\big)^2/\|\vec e_i\|^2\,ds.
+F^\theta_{e_i}=\int_{\vec e_i}\big(\theta_{i\oplus2}-\theta_{i\oplus1}-\vec K\cdot\vec e_i\big)^2/\lVert \vec e_i\rVert ^2\,ds.
 $$
 
-因 $\vec K$ 沿边线性，可用边均值 $\vec K_i=(\vec K_{i\oplus2}+\vec K_{i\oplus1})/2$ 并按 $\|\vec e_i\|$ 缩放（不改极小点）：
+因 $\vec K$ 沿边线性，可用边均值 $\vec K_i=(\vec K_{i\oplus2}+\vec K_{i\oplus1})/2$ 并按 $\lVert \vec e_i\rVert $ 缩放（不改极小点）：
 
 $$
 F^\theta_{T,i}=\big((\theta_{i\oplus2}-\theta_{i\oplus1})-\omega\vec K_i\cdot\vec e_i\big)^2.
@@ -144,7 +144,7 @@ $$
 用一阶 Taylor 把"角度差"近似为"sin/cos 向量差的模"，整数 $s$ 被消去（周期性内建于 $\sin/\cos$）：
 
 $$
-F^\theta_{T,i}\simeq\left\|\,U_{i\oplus2}-R(\omega\vec K_i\cdot\vec e_i)\,U_{i\oplus1}\right\|^2,
+F^\theta_{T,i}\simeq\left\lVert \,U_{i\oplus2}-R(\omega\vec K_i\cdot\vec e_i)\,U_{i\oplus1}\right\rVert ^2,
 \qquad R(\alpha)=\begin{pmatrix}\cos\alpha&-\sin\alpha\\ \sin\alpha&\cos\alpha\end{pmatrix}.
 $$
 
@@ -153,7 +153,7 @@ $$
 向量场一般**无法全局一致定向**（如球面）。在每个三角形内允许各顶点的控制场独立旋转 $r_i\in\{0,1,2,3\}$（即 $r_i\cdot\pi/2$），把 $\vec K_2,\vec K_3$ 旋到与 $\vec K_1$ 对齐；**旋转同时作用于控制场 $(\vec K_i,\vec K_i^\perp)$ 与未知量 $(\theta_i,\phi_i)$**。奇数旋转差意味着交换 $\theta\leftrightarrow\phi$，故二者不可再分离。式 (11) 推广为
 
 $$
-F_{T,i}=\min_{s,t}\left\|J^{r_{i\oplus2}}\binom{\theta_{i\oplus2}}{\phi_{i\oplus2}}-J^{r_{i\oplus1}}\binom{\theta_{i\oplus1}+2s\pi}{\phi_{i\oplus1}+2t\pi}-\binom{\delta_i}{\delta_i^\perp}\right\|^2,
+F_{T,i}=\min_{s,t}\left\lVert J^{r_{i\oplus2}}\binom{\theta_{i\oplus2}}{\phi_{i\oplus2}}-J^{r_{i\oplus1}}\binom{\theta_{i\oplus1}+2s\pi}{\phi_{i\oplus1}+2t\pi}-\binom{\delta_i}{\delta_i^\perp}\right\rVert ^2,
 \quad J=\begin{pmatrix}0&-1\\1&0\end{pmatrix},
 $$
 
@@ -170,8 +170,8 @@ $$
 同样用一阶近似换成 sin/cos，得到 4 维变量 $X_i=(U_i;V_i)=(\cos\theta_i,\sin\theta_i,\cos\phi_i,\sin\phi_i)$ 的二次型：
 
 $$
-F_{T,i}\simeq\left\|\,M^{r_{i\oplus2}}X_{i\oplus2}-
-\begin{pmatrix}\cos\delta_i&-\sin\delta_i&0&0\\ \sin\delta_i&\cos\delta_i&0&0\\ 0&0&\cos\delta_i^\perp&-\sin\delta_i^\perp\\ 0&0&\sin\delta_i^\perp&\cos\delta_i^\perp\end{pmatrix}M^{r_{i\oplus1}}X_{i\oplus1}\right\|^2,
+F_{T,i}\simeq\left\lVert \,M^{r_{i\oplus2}}X_{i\oplus2}-
+\begin{pmatrix}\cos\delta_i&-\sin\delta_i&0&0\\ \sin\delta_i&\cos\delta_i&0&0\\ 0&0&\cos\delta_i^\perp&-\sin\delta_i^\perp\\ 0&0&\sin\delta_i^\perp&\cos\delta_i^\perp\end{pmatrix}M^{r_{i\oplus1}}X_{i\oplus1}\right\rVert ^2,
 $$
 
 $$
@@ -194,17 +194,17 @@ $$
 
 代入 $\lambda_i^T$ 得到关于 $X_i$ 的总二次能量 $F^*$。锁定一个顶点 $U_1=(1,0),\ V_1=(1,0)$，对其余变量求极小——这是**稀疏对称系统**，用带 Jacobi 预条件的共轭梯度求解。
 
-**问题**：$>50\mathrm K$ 顶点的模型，远离锁定点时 $\|U_i\|,\|V_i\|$ 快速衰减，造成加权偏差与数值不稳定。
+**问题**：$>50\mathrm K$ 顶点的模型，远离锁定点时 $\lVert U_i\rVert ,\lVert V_i\rVert $ 快速衰减，造成加权偏差与数值不稳定。
 
 **解决**：加非线性罚项防止模衰减：
 
 $$
-F^{**}=F^*+\varepsilon\sum_i\big[(\|U_i\|^2-1)^2+(\|V_i\|^2-1)^2\big].
+F^{**}=F^*+\varepsilon\sum_i\big[(\lVert U_i\rVert ^2-1)^2+(\lVert V_i\rVert ^2-1)^2\big].
 $$
 
-用 Newton 法求解，初值取无罚项线性解，$\varepsilon=10^{-3}$，所有示例 $\le5$ 次外迭代即收敛到 $\|\nabla F^{**}\|<10^{-6}$。
+用 Newton 法求解，初值取无罚项线性解，$\varepsilon=10^{-3}$，所有示例 $\le5$ 次外迭代即收敛到 $\lVert \nabla F^{**}\rVert <10^{-6}$。
 
-> **罚项的额外好处**：奇异点对应 $\|U_i\|\to0$（模为零、能量 $F^*$ 高，见图 5）；同一区域出现两个奇异点会让罚项激增，于是优化**自发把奇异点均匀分散到整张曲面**——这是局部松弛方法做不到的。
+> **罚项的额外好处**：奇异点对应 $\lVert U_i\rVert \to0$（模为零、能量 $F^*$ 高，见图 5）；同一区域出现两个奇异点会让罚项激增，于是优化**自发把奇异点均匀分散到整张曲面**——这是局部松弛方法做不到的。
 
 ---
 
@@ -214,7 +214,7 @@ $$
 
 ### 3.1 逐三角形重建（Algorithm 1）
 
-给定 $T=(i,j,k)$ 的 $U,V$，要确定整数平移 $(s,t)$ 与旋转 $r$。把首顶点 $i$ 的自由度设为 $(r,s,t)=(0,0,0)$，则 $\theta_i^T=\operatorname{angle}(U_i),\ \phi_i^T=\operatorname{angle}(V_i)$（$\operatorname{angle}(U)=\operatorname{sign}(U_y)\arccos(U_x/\|U\|)$）。再沿每条边传播确定差值 $s_e^T,t_e^T,r_e^T$：
+给定 $T=(i,j,k)$ 的 $U,V$，要确定整数平移 $(s,t)$ 与旋转 $r$。把首顶点 $i$ 的自由度设为 $(r,s,t)=(0,0,0)$，则 $\theta_i^T=\operatorname{angle}(U_i),\ \phi_i^T=\operatorname{angle}(V_i)$（$\operatorname{angle}(U)=\operatorname{sign}(U_y)\arccos(U_x/\lVert U\rVert )$）。再沿每条边传播确定差值 $s_e^T,t_e^T,r_e^T$：
 
 ```
 沿边 e=(i,j) 从 i 传播到 j：
@@ -292,14 +292,14 @@ $$
 其解形如 $v=Ce^{ay-bx}$。取对数后 $\nabla\log v=(-b,\ a)$。由于全局零旋未必存在，对 $\tilde v_i=\log v_i$ 做最小二乘：
 
 $$
-G(\tilde v)=\sum_T A_T\left\|J_T\begin{pmatrix}\tilde v_1\\ \tilde v_2\\ \tilde v_3\end{pmatrix}-J\,J_T\begin{pmatrix}\gamma_1\\ \gamma_2\\ \gamma_3\end{pmatrix}\right\|^2,\quad
+G(\tilde v)=\sum_T A_T\left\lVert J_T\begin{pmatrix}\tilde v_1\\ \tilde v_2\\ \tilde v_3\end{pmatrix}-J\,J_T\begin{pmatrix}\gamma_1\\ \gamma_2\\ \gamma_3\end{pmatrix}\right\rVert ^2,\quad
 J_T=\frac{1}{2A_T}\begin{pmatrix}y_2-y_3&y_3-y_1&y_1-y_2\\ x_3-x_2&x_1-x_3&x_2-x_1\end{pmatrix},
 $$
 
 （$J=\big(\begin{smallmatrix}0&-1\\1&0\end{smallmatrix}\big)$，$J_T$ 是面上分片线性梯度算子）。设 $\tilde v_1=0$ 解出其余，取 $v_i=\exp(\tilde v_i)$ 并按 $\max v_i$ 归一。最后把 $v$ 代回能量：
 
 $$
-F=\int_S\big(\|\nabla\theta-\omega v\vec K\|^2+\|\nabla\phi-\omega v\vec K^\perp\|^2\big)\,dS,
+F=\int_S\big(\lVert \nabla\theta-\omega v\vec K\rVert ^2+\lVert \nabla\phi-\omega v\vec K^\perp\rVert ^2\big)\,dS,
 $$
 
 照 §2 继续求解。**效果**：参数化仍共形但 stretch 略增，奇异点大幅减少（如 octopus 由 27 降到 0，图 8）。
@@ -311,14 +311,14 @@ $$
 对每个顶点设变量 $\alpha_i$ = $\vec K_i$ 与切平面内参考方向 $\vec H_i$ 的夹角（$\vec H_i$ 由某出边投影到切平面得到）。最小化"拟合 + 平滑"能量：
 
 $$
-R=(1-\rho)\underbrace{\sum_i\big|k_{\max i}/k_{\min i}\big|\,\big\|(\cos\alpha_i,\sin\alpha_i)-(\cos\alpha_i^0,\sin\alpha_i^0)\big\|^2}_{\text{拟合项（按各向异性加权）}}
+R=(1-\rho)\underbrace{\sum_i\big|k_{\max i}/k_{\min i}\big|\,\big\lVert (\cos\alpha_i,\sin\alpha_i)-(\cos\alpha_i^0,\sin\alpha_i^0)\big\rVert ^2}_{\text{拟合项（按各向异性加权）}}
 +\rho\underbrace{\sum_T R_T}_{\text{平滑项}},
 $$
 
 平滑项 $R_T=\sum_i\lambda_i^T R_{T,i}$（$\lambda_i^T$ 同附录 B），其边项
 
 $$
-R_{T,i}=\left\|\binom{\cos\alpha_{i\oplus2}}{\sin\alpha_{i\oplus2}}-\begin{pmatrix}\cos\beta_i&\sin\beta_i\\ -\sin\beta_i&\cos\beta_i\end{pmatrix}\binom{\cos\alpha_{i\oplus1}}{\sin\alpha_{i\oplus1}}\right\|^2,\quad
+R_{T,i}=\left\lVert \binom{\cos\alpha_{i\oplus2}}{\sin\alpha_{i\oplus2}}-\begin{pmatrix}\cos\beta_i&\sin\beta_i\\ -\sin\beta_i&\cos\beta_i\end{pmatrix}\binom{\cos\alpha_{i\oplus1}}{\sin\alpha_{i\oplus1}}\right\rVert ^2,\quad
 \begin{cases}\cos\beta_i=\vec H_{i\oplus1}\cdot\vec H_{i\oplus2}\\ \sin\beta_i=(\vec H_{i\oplus1}\times\vec H_{i\oplus2})\cdot\vec N_T\end{cases}
 $$
 
@@ -415,7 +415,7 @@ $$
 | 变量 | 顶点上 $U_i=(\cos\theta_i,\sin\theta_i)$ | 顶点上 $u_i,v_i$（直接坐标） |
 | $2\pi$ 平移 | 三角函数自动内建 | **显式整数** $\mathbf p_T\in\mathbb Z^2$（每面） |
 | $\pi/2$ 旋转 | 每三角形局部旋转 $r_i$ | **显式整数** $k_T\in\{0,1,2,3\}$（每面） |
-| 能量 | $X_i$ 的二次型 + Newton 罚项 | $\|\nabla u-\text{target}\|^2$ 的二次型 |
+| 能量 | $X_i$ 的二次型 + Newton 罚项 | $\lVert \nabla u-\text{target}\rVert ^2$ 的二次型 |
 | 整数优化 | 不存在（事后 Algorithm 1 重建） | **交替优化**：贪心舍入 $k,p$ ↔ 解线性系统 |
 | 求解器 | CG + Newton 外迭代 | Cholesky (SimplicialLDLT) + CG fallback |
 
@@ -433,7 +433,7 @@ $$
 能量（每面）：
 
 $$
-E=\sum_T A_T\Big[\big\|\nabla u_T-\big(R(k_T\pi/2)\,\mathbf d_T^u+\mathbf p_T\big)\big\|^2+\big\|\nabla v_T-\big(R(k_T\pi/2)\,\mathbf d_T^v+\mathbf p_T\big)\big\|^2\Big].
+E=\sum_T A_T\Big[\big\lVert \nabla u_T-\big(R(k_T\pi/2)\,\mathbf d_T^u+\mathbf p_T\big)\big\rVert ^2+\big\lVert \nabla v_T-\big(R(k_T\pi/2)\,\mathbf d_T^v+\mathbf p_T\big)\big\rVert ^2\Big].
 $$
 
 实现位于 `cpp/conformal-parameterization/Parameterization/GlobalFieldsParam/PGP.cpp`。

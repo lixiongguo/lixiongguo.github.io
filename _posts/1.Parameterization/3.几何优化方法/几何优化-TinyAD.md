@@ -33,7 +33,7 @@ $$
 | **前向** | $O(k^2)$–$O(k^3)$ | 一次前向遍历；无 tape；控制流自由 |
 | **反向** | 一阶 $O(k)$，二阶需额外遍 | 对大规模 $n$ 渐近更优；需图/tape；分支要 retape |
 
-渐近上反向对 $n$ 更优，但当 $k$ 很小时常数因子主导。论文图 4：对 $\|x\|_2$（$x\in\mathbb{R}^k$）求梯度+Hessian，$k=6$ 时 TinyAD 比 ADOL-C 快约 **73 倍**；31.9 万三角面的参数化中，单线程前向也显著快于反向 tape（图 7）。
+渐近上反向对 $n$ 更优，但当 $k$ 很小时常数因子主导。论文图 4：对 $\lVert x\rVert _2$（$x\in\mathbb{R}^k$）求梯度+Hessian，$k=6$ 时 TinyAD 比 ADOL-C 快约 **73 倍**；31.9 万三角面的参数化中，单线程前向也显著快于反向 tape（图 7）。
 
 **核心设计**：不在全局 $n$ 维上做 AD，而在每个元素的 $k$ 维子问题上用 `TinyAD::Double<k>` 前向传播 $(v,\mathbf{g},\mathbf{H})$，再散射到全局稀疏 $\mathbf{g},\mathbf{H}$。
 
@@ -363,7 +363,7 @@ x ← Tutte 初值
   x ← line_search(x, d, f, g, func)    // 内部用 eval，无 AD
 ```
 
-对称 Dirichlet 面能量：$A(\|J\|_F^2+\|J^{-1}\|_F^2)$；翻转分支 `det≤0 → ∞` 见论文图 2 完整 listing。
+对称 Dirichlet 面能量：$A(\lVert J\rVert _F^2+\lVert J^{-1}\rVert _F^2)$；翻转分支 `det≤0 → ∞` 见论文图 2 完整 listing。
 
 ---
 

@@ -30,7 +30,7 @@ $$
 光滑情形下，到源的距离函数满足 **Eikonal 方程**：
 
 $$
-\|\nabla\phi\|=1,\qquad \phi\big|_{\gamma}=0
+\lVert \nabla\phi\rVert =1,\qquad \phi\big|_{\gamma}=0
 $$
 
 （在可微处；脊线 / 割迹上梯度不可微。）
@@ -69,7 +69,7 @@ $$
 $$
 \begin{aligned}
 \text{I.}&\quad \text{积分热流 }\dot u=\Delta u\text{（固定时间 }t\text{）}\\
-\text{II.}&\quad X=-\frac{\nabla u}{\|\nabla u\|}\\
+\text{II.}&\quad X=-\frac{\nabla u}{\lVert \nabla u\rVert }\\
 \text{III.}&\quad \text{解 Poisson }\Delta\phi=\nabla\cdot X
 \end{aligned}
 $$

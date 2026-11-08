@@ -125,12 +125,12 @@ $$
 **② 度量失真**（由 $\varphi_\alpha^{p}$ 捕捉）。简化中生成的 $\varphi_\alpha$ 对最终失真给出保守估计。在重心坐标落在 $T_\alpha$ 的顶点所关联的边 $e$ 上度量边长比：
 
 $$
-\delta(T_\alpha)=\frac{1}{\sum_{e\in P_\alpha}\|\varphi_\alpha(e)\|}
+\delta(T_\alpha)=\frac{1}{\sum_{e\in P_\alpha}\lVert \varphi_\alpha(e)\rVert }
 \sum_{e\in P_\alpha}
-\max\!\left(\frac{\|\varphi_\alpha(e)\|}{\|\varphi_\alpha^{e}(e)\|},\ \frac{\|\varphi_\alpha^{e}(e)\|}{\|\varphi_\alpha(e)\|}\right)^{2}\cdot\|\varphi_\alpha(e)\|,
+\max\!\left(\frac{\lVert \varphi_\alpha(e)\rVert }{\lVert \varphi_\alpha^{e}(e)\rVert },\ \frac{\lVert \varphi_\alpha^{e}(e)\rVert }{\lVert \varphi_\alpha(e)\rVert }\right)^{2}\cdot\lVert \varphi_\alpha(e)\rVert ,
 $$
 
-即按边长 $\|\varphi_\alpha(e)\|$ 加权累加"拉伸/压缩比的平方"，再用边长之和归一化。只按度量失真优化会让 patch 对齐平坦区域，却产生细长三角形（下图 b）。
+即按边长 $\lVert \varphi_\alpha(e)\rVert $ 加权累加"拉伸/压缩比的平方"，再用边长之和归一化。只按度量失真优化会让 patch 对齐平坦区域，却产生细长三角形（下图 b）。
 
 **③ Oracle（综合代价）**。给候选顶点 $v$，对其删除后空洞重三角化 $R$ 中每个三角形 $T_\alpha$ 评估上述启发量，平移到零并加权组合：
 

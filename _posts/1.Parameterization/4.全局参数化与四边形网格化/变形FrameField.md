@@ -142,7 +142,7 @@ Frame field 诱导的度量 $g_{\mathcal{F}} = \mathbf{W}^{-T}\mathbf{W}^{-1}$�
 三角形 $t$ 上，$\mathbf{W}_t$ 把 cross $\mathbf{x}_t$ 变为 frame $f_t$，故**理想局部变形**为 $\mathbf{W}_t^{-1}$：把当前 frame "拉直"为 cross。闭网格上无法每个三角形精确达到理想形变，故最小化 ARAP 型能量：
 
 $$
-\mathcal{E}(\mathbf{p}') = \sum_{t \in \mathcal{M}} \min_{\mathbf{Q}_t \in SO(3)} A_t \left\| \mathbf{J}_t(\mathbf{p}') - \mathbf{Q}_t \tilde{\mathbf{W}}_t^{-1} \right\|_F^2
+\mathcal{E}(\mathbf{p}') = \sum_{t \in \mathcal{M}} \min_{\mathbf{Q}_t \in SO(3)} A_t \left\lVert  \mathbf{J}_t(\mathbf{p}') - \mathbf{Q}_t \tilde{\mathbf{W}}_t^{-1} \right\rVert _F^2
 \tag{5}
 $$
 

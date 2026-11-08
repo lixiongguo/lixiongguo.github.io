@@ -85,10 +85,10 @@ $$
 **关键恒等式**——离散 Dirichlet 能量与 Laplacian 二次型等价：
 
 $$
-\frac{1}{2}x^T H x = \frac{1}{2}\sum_j \|T_j\|_F^2\,|t_j| = \frac{1}{2}\sum_{j,k} \sigma_k(T_j)^2\,|t_j|
+\frac{1}{2}x^T H x = \frac{1}{2}\sum_j \lVert T_j\rVert _F^2\,|t_j| = \frac{1}{2}\sum_{j,k} \sigma_k(T_j)^2\,|t_j|
 $$
 
-其中 $H = L \otimes I_d$，$L$ 为 cotan Laplacian。因此：**凡是在 $E(T)$ 中出现 $\|T\|_F^2$ 或等价二次项的能量，都可以把该项抽出来放进 $h(x)=\frac{1}{2}x^T H x$，余下部分放进 $g(x)$**。
+其中 $H = L \otimes I_d$，$L$ 为 cotan Laplacian。因此：**凡是在 $E(T)$ 中出现 $\lVert T\rVert _F^2$ 或等价二次项的能量，都可以把该项抽出来放进 $h(x)=\frac{1}{2}x^T H x$，余下部分放进 $g(x)$**。
 
 分解后梯度为
 
@@ -100,50 +100,50 @@ AQP 每步在 $y_n$ 处线性化 $g$（保留 $h$ 的二次结构），故只需
 
 ### 3.2 ARAP：核范数项
 
-局部 ARAP 能量 $\mathcal{D}_{\text{ARAP}}(T) = \|T - R(T)\|_F^2$。展开：
+局部 ARAP 能量 $\mathcal{D}_{\text{ARAP}}(T) = \lVert T - R(T)\rVert _F^2$。展开：
 
 $$
-\|T - R\|_F^2 = \|T\|_F^2 + \|R\|_F^2 - 2\,\mathrm{tr}(T^T R) = \|T\|_F^2 + d - 2\|T\|_*
+\lVert T - R\rVert _F^2 = \lVert T\rVert _F^2 + \lVert R\rVert _F^2 - 2\,\mathrm{tr}(T^T R) = \lVert T\rVert _F^2 + d - 2\lVert T\rVert _*
 $$
 
-（$R$ 为正交矩阵，$\|R\|_F^2 = d$；$\mathrm{tr}(T^T R) = \|T\|_*$ 为核范数。）对全网求和：
+（$R$ 为正交矩阵，$\lVert R\rVert _F^2 = d$；$\mathrm{tr}(T^T R) = \lVert T\rVert _*$ 为核范数。）对全网求和：
 
 $$
-f_{\text{ARAP}}(x) = \underbrace{\frac{1}{2}x^T H x}_{h(x)} \;-\; \underbrace{\sum_j \|T_j\|_* |t_j|}_{g(x)} \;+\; c_0
+f_{\text{ARAP}}(x) = \underbrace{\frac{1}{2}x^T H x}_{h(x)} \;-\; \underbrace{\sum_j \lVert T_j\rVert _* |t_j|}_{g(x)} \;+\; c_0
 $$
 
-$h$ 是 Laplacian 二次项；$g$ 中的 $-\|T\|_*$ 是非光滑非线性项（SVD 奇异值之和）。**无加速版 AQP（QP）对 ARAP 恰好退化为 local/global**：KKT 步等价于 global 步，$\nabla g$ 中的旋转投影隐含在 $\nabla f_{\text{ARAP}}$ 的计算里。
+$h$ 是 Laplacian 二次项；$g$ 中的 $-\lVert T\rVert _*$ 是非光滑非线性项（SVD 奇异值之和）。**无加速版 AQP（QP）对 ARAP 恰好退化为 local/global**：KKT 步等价于 global 步，$\nabla g$ 中的旋转投影隐含在 $\nabla f_{\text{ARAP}}$ 的计算里。
 
 ### 3.3 ISO：逆 Jacobian 项
 
-等距畸变 $\mathcal{D}_{\text{ISO}}(T) = \|T^{-1}\|_F^2$。利用 $\|T\|_F^2$ 恒等式：
+等距畸变 $\mathcal{D}_{\text{ISO}}(T) = \lVert T^{-1}\rVert _F^2$。利用 $\lVert T\rVert _F^2$ 恒等式：
 
 $$
-f_{\text{ISO}}(x) = \frac{1}{2}x^T H x + \frac{1}{2}\sum_j \|T_j^{-1}\|_F^2 |t_j|
+f_{\text{ISO}}(x) = \frac{1}{2}x^T H x + \frac{1}{2}\sum_j \lVert T_j^{-1}\rVert _F^2 |t_j|
 $$
 
-二次项进入 $h$，$\|T^{-1}\|_F^2$ 全部留在 $g$。ISO 在极小附近病态严重，正是 AQP 预条件发挥最大作用的场景之一（论文 Fig. 1：105 次迭代 vs L-BFGS 2300 次）。
+二次项进入 $h$，$\lVert T^{-1}\rVert _F^2$ 全部留在 $g$。ISO 在极小附近病态严重，正是 AQP 预条件发挥最大作用的场景之一（论文 Fig. 1：105 次迭代 vs L-BFGS 2300 次）。
 
 ### 3.4 CONF（$d=2$）：共形比项
 
 二维共形畸变可写为
 
 $$
-f_{\text{CONF}}(x) = \frac{1}{2}x^T H x + \frac{1}{2}\sum_j \left(\frac{1}{\sigma_d(T_j)^2} - 1\right)\|T_j\|_F^2 |t_j|
+f_{\text{CONF}}(x) = \frac{1}{2}x^T H x + \frac{1}{2}\sum_j \left(\frac{1}{\sigma_d(T_j)^2} - 1\right)\lVert T_j\rVert _F^2 |t_j|
 $$
 
-同样把 $\frac{1}{2}\|T\|_F^2$ 归入 $h$，含最小奇异值 $\sigma_d$ 的非线性因子留在 $g$。CONF 分解仅对三角网格成立（$d=2$）。
+同样把 $\frac{1}{2}\lVert T\rVert _F^2$ 归入 $h$，含最小奇异值 $\sigma_d$ 的非线性因子留在 $g$。CONF 分解仅对三角网格成立（$d=2$）。
 
 ### 3.5 汇总
 
 | 能量                | $h(x)=\frac{1}{2}x^T Hx$ 来源     | $g(x)$ 中的非线性部分                  |
 | :------------------ | :-------------------------------- | :------------------------------------- |
 | Dirichlet           | 全部                              | 无                                     |
-| ARAP                | $\frac{1}{2}\sum \|T\|_F^2 |t_j|$ | $-\sum \|T\|_* |t_j|$                  |
-| Symmetric Dirichlet | $\frac{1}{2}\sum \|T\|_F^2 |t_j|$ | $\frac{1}{2}\sum \|T^{-1}\|_F^2 |t_j|$ |
-| ISO                 | 同上                              | $\frac{1}{2}\sum \|T^{-1}\|_F^2 |t_j|$ |
+| ARAP                | $\frac{1}{2}\sum \lVert T\rVert _F^2 |t_j|$ | $-\sum \lVert T\rVert _* |t_j|$                  |
+| Symmetric Dirichlet | $\frac{1}{2}\sum \lVert T\rVert _F^2 |t_j|$ | $\frac{1}{2}\sum \lVert T^{-1}\rVert _F^2 |t_j|$ |
+| ISO                 | 同上                              | $\frac{1}{2}\sum \lVert T^{-1}\rVert _F^2 |t_j|$ |
 | MIPS                | 无（或需其他处理）                | 全部在 $g$                             |
-| CONF ($d=2$)        | $\frac{1}{2}\sum \|T\|_F^2 |t_j|$ | 共形比 $(\sigma_1/\sigma_2)^2$ 相关项  |
+| CONF ($d=2$)        | $\frac{1}{2}\sum \lVert T\rVert _F^2 |t_j|$ | 共形比 $(\sigma_1/\sigma_2)^2$ 相关项  |
 
 ### 3.6 Kronecker 积：$H = L \otimes I_d$ 的含义与实现
 
@@ -182,7 +182,7 @@ $$
 = \frac{1}{2}\sum_{\alpha=1}^{d} x_\alpha^T L x_\alpha
 $$
 
-这正是离散 **Dirichlet 能量** $\frac{1}{2}\int \|\nabla u\|^2 + \|\nabla v\|^2 \, dA$ 在三角网格上的标准二次型。
+这正是离散 **Dirichlet 能量** $\frac{1}{2}\int \lVert \nabla u\rVert ^2 + \lVert \nabla v\rVert ^2 \, dA$ 在三角网格上的标准二次型。
 
 #### 3.6.2 二维示例：$L \otimes I_2$ 的分块结构
 
@@ -223,7 +223,7 @@ $$
 
 若把 $u,v$ 交错排列为 $(u_1,v_1,u_2,v_2,\ldots)$，Laplacian 二次项对应的 $H$ **不再**是块对角，$u_i$ 与 $v_i$ 会混在同一 $2\times 2$ 块里——但那是变量顺序问题，能量本身仍不耦合 $u$ 与 $v$。AQP 与 libigl 等实现采用 $\mathrm{vec}$ 列堆叠 + $L \otimes I_d$，是为了：
 
-1. 与 $\sum_T \|T_j\|_F^2 |t_j|$ 的推导一致；
+1. 与 $\sum_T \lVert T_j\rVert _F^2 |t_j|$ 的推导一致；
 2. 一次预分解 $L$，$d$ 个坐标共享；
 3. 与 $\nabla f$ 的按坐标累加实现自然对齐。
 
@@ -315,7 +315,7 @@ $$
 
 **与 Newton 的对比**：若在 $y_n$ 处对**完整** $f$ 做二次近似，KKT 左端为 $\nabla^2 f(y_n)$，每步随 $y_n$ 变化。AQP 用**固定** $H$ 替代 $\nabla^2 h$，右端仍用真实梯度 $\nabla f(y_n)$，从而左端可预分解。
 
-**与 proximal gradient 的对比**：近端步对应 $\min_p \frac{1}{2}p^T H p + \nabla f(y_n)^T p + \frac{1}{2t}\|p\|^2$，KKT 左端变为 $H + \frac{1}{t}I$，依赖步长 $t$，无法一次预分解。
+**与 proximal gradient 的对比**：近端步对应 $\min_p \frac{1}{2}p^T H p + \nabla f(y_n)^T p + \frac{1}{2t}\lVert p\rVert ^2$，KKT 左端变为 $H + \frac{1}{t}I$，依赖步长 $t$，无法一次预分解。
 
 左端矩阵**恒定**，预处理 LU/Cholesky 一次，每步回代。
 
@@ -365,7 +365,7 @@ $$
 \theta = \frac{1 - \sqrt{\kappa^{-1}}}{1 + \sqrt{\kappa^{-1}}}
 $$
 
-**Theorem 1**：取 $\eta = \kappa(Q)$ 时，$\|e_n\| \leq c(1-\sqrt{\kappa^{-1}})^n$。
+**Theorem 1**：取 $\eta = \kappa(Q)$ 时，$\lVert e_n\rVert  \leq c(1-\sqrt{\kappa^{-1}})^n$。
 
 ### 5.3 为何 $\theta$ 可以"普适"
 
@@ -407,7 +407,7 @@ $$
             ISO/CONF 用 [Smith & Schaefer 2015] barrier 限制 t，防翻转
 ```
 
-**终止**：$\|\nabla f\| < \varepsilon$ 或能量变化足够小。
+**终止**：$\lVert \nabla f\rVert  < \varepsilon$ 或能量变化足够小。
 
 **实验**（Fig. 1）：2D ISO 变形，AQP 约 105 次迭代、0.11 s；L-BFGS 约 2300 次（极端案例可达 ×200 加速）。
 

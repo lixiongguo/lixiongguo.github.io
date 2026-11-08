@@ -49,8 +49,8 @@ $$
 | 基 | 形式（示意） | 特点 |
 | :--- | :--- | :--- |
 | **B-Spline** | 张量积三次均匀 B 样条 | 局部支撑、交互常用 |
-| **TPS** | $\varphi(\|\mathbf{x}-\mathbf{x}_k\|)=r^2\log r$ | 插值型、整体光滑 |
-| **Gaussian** | $\exp(-\|\mathbf{x}-\mathbf{x}_k\|^2/(2s^2))$ | 形状感知（shape-aware）径向基 |
+| **TPS** | $\varphi(\lVert \mathbf{x}-\mathbf{x}_k\rVert )=r^2\log r$ | 插值型、整体光滑 |
+| **Gaussian** | $\exp(-\lVert \mathbf{x}-\mathbf{x}_k\rVert ^2/(2s^2))$ | 形状感知（shape-aware）径向基 |
 
 论文 Table 1 给出各基 $\nabla\varphi$ 的**梯度连续性模** $\omega_{\nabla\varphi}(t)$（见 §5），用于全域传播分析。
 
@@ -100,14 +100,14 @@ $$
 （此处 $\nabla u,\nabla v\in\mathbb{R}^2$ 为列向量。）奇异值可写为（[Lehto & Virtanen 1973]）
 
 $$
-\Sigma(\mathbf{x}) = \bigl\|\mathbf{J}_S f(\mathbf{x})\bigr\| + \bigl\|\mathbf{J}_A f(\mathbf{x})\bigr\|,
+\Sigma(\mathbf{x}) = \bigl\lVert \mathbf{J}_S f(\mathbf{x})\bigr\rVert  + \bigl\lVert \mathbf{J}_A f(\mathbf{x})\bigr\rVert ,
 \qquad
 \sigma(\mathbf{x})
-= \Bigl|\bigl\|\mathbf{J}_S f(\mathbf{x})\bigr\| - \bigl\|\mathbf{J}_A f(\mathbf{x})\bigr\|\Bigr|.
+= \Bigl|\bigl\lVert \mathbf{J}_S f(\mathbf{x})\bigr\rVert  - \bigl\lVert \mathbf{J}_A f(\mathbf{x})\bigr\rVert \Bigr|.
 \tag{20}
 $$
 
-等距界 (10) 即 $\|\mathbf{J}_S\|+\|\mathbf{J}_A\|\le K$ 且 $\|\mathbf{J}_S\|-\|\mathbf{J}_A\|\ge K^{-1}$；后者非凸，§7 用 **frame** 凸化。该分解也是 **Lemma 2**（附录 B）与 SOCP 约束 (21)–(28) 的基础。
+等距界 (10) 即 $\lVert \mathbf{J}_S\rVert +\lVert \mathbf{J}_A\rVert \le K$ 且 $\lVert \mathbf{J}_S\rVert -\lVert \mathbf{J}_A\rVert \ge K^{-1}$；后者非凸，§7 用 **frame** 凸化。该分解也是 **Lemma 2**（附录 B）与 SOCP 约束 (21)–(28) 的基础。
 
 ---
 
@@ -127,7 +127,7 @@ $$
 **填充距离（fill distance）** 量化密度：
 
 $$
-h(\mathcal{Z},\Omega) = \max_{\mathbf{x}\in\Omega}\;\min_{\mathbf{z}\in\mathcal{Z}} \|\mathbf{x}-\mathbf{z}\|.
+h(\mathcal{Z},\Omega) = \max_{\mathbf{x}\in\Omega}\;\min_{\mathbf{z}\in\mathcal{Z}} \lVert \mathbf{x}-\mathbf{z}\rVert .
 \tag{5}
 $$
 
@@ -138,14 +138,14 @@ $$
 标量函数 $g:\mathbb{R}^2\to\mathbb{R}$ 具有连续性模 $\omega$（**$\omega$-连续**），若
 
 $$
-|g(\mathbf{x}) - g(\mathbf{y})| \leq \omega(\|\mathbf{x} - \mathbf{y}\|), \quad \forall \mathbf{x}, \mathbf{y} \in \Omega,
+|g(\mathbf{x}) - g(\mathbf{y})| \leq \omega(\lVert \mathbf{x} - \mathbf{y}\rVert ), \quad \forall \mathbf{x}, \mathbf{y} \in \Omega,
 \tag{6}
 $$
 
 其中 $\omega:\mathbb{R}^+\to\mathbb{R}^+$ 连续、严格单调且 $\omega(0)=0$。向量值映射 $\mathbf{g}:\mathbb{R}^2\to\mathbb{R}^2$ 同理：
 
 $$
-\|\mathbf{g}(\mathbf{x}) - \mathbf{g}(\mathbf{y})\| \leq \omega(\|\mathbf{x} - \mathbf{y}\|), \quad \forall \mathbf{x}, \mathbf{y} \in \Omega.
+\lVert \mathbf{g}(\mathbf{x}) - \mathbf{g}(\mathbf{y})\rVert  \leq \omega(\lVert \mathbf{x} - \mathbf{y}\rVert ), \quad \forall \mathbf{x}, \mathbf{y} \in \Omega.
 \tag{7}
 $$
 
@@ -156,22 +156,22 @@ $$
 对式 (1) 的映射，先界 $\nabla u$。记 $\omega_{\nabla f_i}$ 为基梯度 $\nabla f_i$ 的连续性模，$\omega_{\nabla\mathcal{F}}(t)\ge \omega_{\nabla f_i}(t)$ 对所有 $f_i\in\mathcal{F}$ 成立；矩阵**最大范数**
 
 $$
-\|\!\|\mathbf{C}\|\!\| = \max_{\ell\in\{1,2\}} \sum_{i=1}^{n} \bigl|c_i^{(\ell)}\bigr|.
+\lVert \!\rVert \mathbf{C}\lVert \!\rVert  = \max_{\ell\in\{1,2\}} \sum_{i=1}^{n} \bigl|c_i^{(\ell)}\bigr|.
 $$
 
 则
 
 $$
-\|\nabla u(\mathbf{x}) - \nabla u(\mathbf{y})\|
-\leq \sum_{i=1}^{n} \bigl|c_i^{(u)}\bigr|\,\|\nabla f_i(\mathbf{x}) - \nabla f_i(\mathbf{y})\|
-\leq \|\!\|\mathbf{C}\|\!\|\,\omega_{\nabla\mathcal{F}}(\|\mathbf{x}-\mathbf{y}\|),
+\lVert \nabla u(\mathbf{x}) - \nabla u(\mathbf{y})\rVert 
+\leq \sum_{i=1}^{n} \bigl|c_i^{(u)}\bigr|\,\lVert \nabla f_i(\mathbf{x}) - \nabla f_i(\mathbf{y})\rVert 
+\leq \lVert \!\rVert \mathbf{C}\lVert \!\rVert \,\omega_{\nabla\mathcal{F}}(\lVert \mathbf{x}-\mathbf{y}\rVert ),
 \tag{8}
 $$
 
-故 $\omega_{\nabla u}=\omega_{\nabla v}=\|\!\|\mathbf{C}\|\!\|\,\omega_{\nabla\mathcal{F}}$。由 Lemma 2，奇异值函数的连续性模为
+故 $\omega_{\nabla u}=\omega_{\nabla v}=\lVert \!\rVert \mathbf{C}\lVert \!\rVert \,\omega_{\nabla\mathcal{F}}$。由 Lemma 2，奇异值函数的连续性模为
 
 $$
-\omega_{\Sigma,\sigma} = 2\,\|\!\|\mathbf{C}\|\!\|\,\omega_{\nabla\mathcal{F}}.
+\omega_{\Sigma,\sigma} = 2\,\lVert \!\rVert \mathbf{C}\lVert \!\rVert \,\omega_{\nabla\mathcal{F}}.
 \tag{9}
 $$
 
@@ -180,8 +180,8 @@ $$
 | 基 $f_i$ | $\omega_{\nabla\mathcal{F}}(t)$ |
 | :--- | :--- |
 | 三次均匀 B-Spline | $\dfrac{4}{3\Delta^2}\,t$，$\Delta$ 为网格间距 |
-| TPS $\tfrac{1}{2}\|\mathbf{x}-\mathbf{x}_i\|^2\log\|\mathbf{x}-\mathbf{x}_i\|^2$ | $t\bigl(5.8 + 5|\log t|\bigr)$（局部，$\|\mathbf{x}-\mathbf{y}\|\lesssim 0.29$） |
-| Gaussian $\exp\!\bigl(-\|\mathbf{x}-\mathbf{x}_i\|^2/(2s^2)\bigr)$ | $t/s^2$ |
+| TPS $\tfrac{1}{2}\lVert \mathbf{x}-\mathbf{x}_i\rVert ^2\log\lVert \mathbf{x}-\mathbf{x}_i\rVert ^2$ | $t\bigl(5.8 + 5|\log t|\bigr)$（局部，$\lVert \mathbf{x}-\mathbf{y}\rVert \lesssim 0.29$） |
+| Gaussian $\exp\!\bigl(-\lVert \mathbf{x}-\mathbf{x}_i\rVert ^2/(2s^2)\bigr)$ | $t/s^2$ |
 
 ---
 
@@ -190,12 +190,12 @@ $$
 **Lemma 1**：设 $\Sigma,\sigma$ 为 $\omega$-连续，$\mathbf{z}\in\mathcal{Z}$ 为配准点。则对任意 $\mathbf{x}\in\Omega$，
 
 $$
-\sigma(\mathbf{z}) - \omega(\|\mathbf{x}-\mathbf{z}\|)
+\sigma(\mathbf{z}) - \omega(\lVert \mathbf{x}-\mathbf{z}\rVert )
 \;\le\; \sigma(\mathbf{x}) \;\le\; \Sigma(\mathbf{x}) \;\le\;
-\Sigma(\mathbf{z}) + \omega(\|\mathbf{x}-\mathbf{z}\|).
+\Sigma(\mathbf{z}) + \omega(\lVert \mathbf{x}-\mathbf{z}\rVert ).
 $$
 
-取 $\|\mathbf{x}-\mathbf{z}\|\le h(\mathcal{Z},\Omega)$ 即得全域界。
+取 $\lVert \mathbf{x}-\mathbf{z}\rVert \le h(\mathcal{Z},\Omega)$ 即得全域界。
 
 ### 5.1 等距界（式 (10)(11)）
 
@@ -318,30 +318,30 @@ $$
 由 (10) 与 (19)(20)，等距约束等价于
 
 $$
-\bigl\|\mathbf{J}_S f(\mathbf{z}_i)\bigr\| + \bigl\|\mathbf{J}_A f(\mathbf{z}_i)\bigr\| \le K,
+\bigl\lVert \mathbf{J}_S f(\mathbf{z}_i)\bigr\rVert  + \bigl\lVert \mathbf{J}_A f(\mathbf{z}_i)\bigr\rVert  \le K,
 \tag{21}
 $$
 
 $$
-\bigl\|\mathbf{J}_S f(\mathbf{z}_i)\bigr\| - \bigl\|\mathbf{J}_A f(\mathbf{z}_i)\bigr\| \ge \frac{1}{K}.
+\bigl\lVert \mathbf{J}_S f(\mathbf{z}_i)\bigr\rVert  - \bigl\lVert \mathbf{J}_A f(\mathbf{z}_i)\bigr\rVert  \ge \frac{1}{K}.
 \tag{22}
 $$
 
 **(21)** 化为标准二阶锥：引入辅助变量 $t_i,s_i$，
 
 $$
-\bigl\|\mathbf{J}_S f(\mathbf{z}_i)\bigr\| \le t_i,
+\bigl\lVert \mathbf{J}_S f(\mathbf{z}_i)\bigr\rVert  \le t_i,
 \qquad
-\bigl\|\mathbf{J}_A f(\mathbf{z}_i)\bigr\| \le s_i,
+\bigl\lVert \mathbf{J}_A f(\mathbf{z}_i)\bigr\rVert  \le s_i,
 \qquad
 t_i + s_i \le K.
 \tag{23}
 $$
 
-**(22)** 含**锥的补集** $\|\mathbf{J}_S\|\ge r_i$，非凸。引入辅助 $r_i$ 后写为
+**(22)** 含**锥的补集** $\lVert \mathbf{J}_S\rVert \ge r_i$，非凸。引入辅助 $r_i$ 后写为
 
 $$
-\bigl\|\mathbf{J}_S f(\mathbf{z}_i)\bigr\| \ge r_i,
+\bigl\lVert \mathbf{J}_S f(\mathbf{z}_i)\bigr\rVert  \ge r_i,
 \tag{24}
 $$
 
@@ -364,7 +364,7 @@ $$
 每步 SOCP 后，为让下一半平面尽可能远离当前 $\mathbf{J}_S$，更新
 
 $$
-\mathbf{d}_i = \frac{\mathbf{J}_S f(\mathbf{z}_i)}{\bigl\|\mathbf{J}_S f(\mathbf{z}_i)\bigr\|}.
+\mathbf{d}_i = \frac{\mathbf{J}_S f(\mathbf{z}_i)}{\bigl\lVert \mathbf{J}_S f(\mathbf{z}_i)\bigr\rVert }.
 \tag{27}
 $$
 
@@ -375,13 +375,13 @@ $$
 共形情形用 frame 形式（与 Lipman 2012 同型，记号与本文一致）：
 
 $$
-\bigl\|\mathbf{J}_A f(\mathbf{z}_i)\bigr\|
+\bigl\lVert \mathbf{J}_A f(\mathbf{z}_i)\bigr\rVert 
 \le \frac{K-1}{K+1}\,\mathbf{J}_S f(\mathbf{z}_i)^\top \mathbf{d}_i,
 \tag{28a}
 $$
 
 $$
-\bigl\|\mathbf{J}_A f(\mathbf{z}_i)\bigr\|
+\bigl\lVert \mathbf{J}_A f(\mathbf{z}_i)\bigr\rVert 
 \le \mathbf{J}_S f(\mathbf{z}_i)^\top \mathbf{d}_i - \delta.
 \tag{28b}
 $$
@@ -392,30 +392,30 @@ $$
 
 $$
 E_{\mathrm{pos}}(f)
-= \sum_{\ell=1}^{n_\ell} \bigl\|f(\mathbf{p}_\ell) - \mathbf{q}_\ell\bigr\|_2
-= \sum_{\ell=1}^{n_\ell} \left\|
+= \sum_{\ell=1}^{n_\ell} \bigl\lVert f(\mathbf{p}_\ell) - \mathbf{q}_\ell\bigr\rVert _2
+= \sum_{\ell=1}^{n_\ell} \left\lVert 
 \sum_{i=1}^{n} \mathbf{c}_i\,\varphi_i(\mathbf{p}_\ell) - \mathbf{q}_\ell
-\right\|_2.
+\right\rVert _2.
 \tag{29}
 $$
 
 这是对每个手柄的**欧氏距离**求和（$\mathbb{R}^2$ 上的 $\ell_2$ 范数再对 $\ell$ 求和），**不是**坐标分量上的 $\ell_1$ 范数。
 
-**为何用 (29) 而非常见的二次能量** $\sum_\ell \|f(\mathbf{p}_\ell)-\mathbf{q}_\ell\|_2^2$？
+**为何用 (29) 而非常见的二次能量** $\sum_\ell \lVert f(\mathbf{p}_\ell)-\mathbf{q}_\ell\rVert _2^2$？
 
 | 能量 | 形式 | 与 SOCP 的关系 |
 | :--- | :--- | :--- |
-| **式 (29)** | $\sum_\ell \|\cdot\|_2$ | 引入辅助变量 $r_\ell$ 后，$\|f(\mathbf{p}_\ell)-\mathbf{q}_\ell\|_2\le r_\ell$ 是**标准二阶锥约束** |
-| **二次** | $\sum_\ell \|\cdot\|_2^2$ | 对 $\mathbf{C}$ 是**纯二次**目标（QP）；也可放进 SOCP（旋转锥 / 等价二次项），但不如 (29) 与畸变锥约束**同型** |
+| **式 (29)** | $\sum_\ell \lVert \cdot\rVert _2$ | 引入辅助变量 $r_\ell$ 后，$\lVert f(\mathbf{p}_\ell)-\mathbf{q}_\ell\rVert _2\le r_\ell$ 是**标准二阶锥约束** |
+| **二次** | $\sum_\ell \lVert \cdot\rVert _2^2$ | 对 $\mathbf{C}$ 是**纯二次**目标（QP）；也可放进 SOCP（旋转锥 / 等价二次项），但不如 (29) 与畸变锥约束**同型** |
 
 最小化 (29) 等价于
 
 $$
 \min_{\mathbf{C},\,\{r_\ell\}} \;\sum_{\ell=1}^{n_\ell} r_\ell
 \quad\text{s.t.}\quad
-\left\|
+\left\lVert 
 \sum_{i=1}^{n} \mathbf{c}_i\,\varphi_i(\mathbf{p}_\ell) - \mathbf{q}_\ell
-\right\|_2 \le r_\ell,\;\forall \ell.
+\right\rVert _2 \le r_\ell,\;\forall \ell.
 \tag{30}
 $$
 
@@ -439,7 +439,7 @@ $$
 
 $$
 E_{\mathrm{bh}}(f) = E_{\mathrm{bh}}(u,v)
-= \iint_{\Omega} \bigl(\|H_u(\mathbf{x})\|_F^2 + \|H_v(\mathbf{x})\|_F^2\bigr)\, dA,
+= \iint_{\Omega} \bigl(\lVert H_u(\mathbf{x})\rVert _F^2 + \lVert H_v(\mathbf{x})\rVert _F^2\bigr)\, dA,
 \tag{31}
 $$
 
@@ -464,7 +464,7 @@ $\mathbf{c}$ 为所有系数拉成的向量，$A_{\mathrm{bh}}\succeq 0$。**纯
 
 $$
 E_{\mathrm{arap}}(f)
-= \sum_{s=1}^{n_s} \bigl\|J_f(\mathbf{r}_s) - Q(\mathbf{r}_s)\bigr\|_F^2,
+= \sum_{s=1}^{n_s} \bigl\lVert J_f(\mathbf{r}_s) - Q(\mathbf{r}_s)\bigr\rVert _F^2,
 \tag{32}
 $$
 
@@ -477,7 +477,7 @@ $$
 
 $$
 E_{\mathrm{arap}}(f)
-= \sum_{s=1}^{n_s} \bigl\|J_f(\mathbf{r}_s) - F_s\bigr\|_F^2,
+= \sum_{s=1}^{n_s} \bigl\lVert J_f(\mathbf{r}_s) - F_s\bigr\rVert _F^2,
 \tag{33}
 $$
 
@@ -487,10 +487,10 @@ $$
 J_f(\mathbf{r}_s)=\sum_{i=1}^{n}\mathbf{c}_i\,\nabla\varphi_i(\mathbf{r}_s)^\top
 \quad\text{（按列堆叠梯度）},
 \qquad
-\|J_f-F_s\|_F^2 = \mathrm{tr}\bigl((J_f-F_s)^\top(J_f-F_s)\bigr),
+\lVert J_f-F_s\rVert _F^2 = \mathrm{tr}\bigl((J_f-F_s)^\top(J_f-F_s)\bigr),
 $$
 
-对 $\mathbf{C}$ 为 $\|\mathbf{C} G_s - F_s\|_F^2$ 型二次项（$G_s$ 为基梯度在 $\mathbf{r}_s$ 的矩阵）。故 **(33) 在固定 frame 下是凸二次能量**，可写入 SOCP 的二次目标或与双调和项共用 $A_{\mathrm{reg}}$。
+对 $\mathbf{C}$ 为 $\lVert \mathbf{C} G_s - F_s\rVert _F^2$ 型二次项（$G_s$ 为基梯度在 $\mathbf{r}_s$ 的矩阵）。故 **(33) 在固定 frame 下是凸二次能量**，可写入 SOCP 的二次目标或与双调和项共用 $A_{\mathrm{reg}}$。
 
 | 能量 | 对 $\mathbf{C}$ | 作用 |
 | :--- | :--- | :--- |
@@ -567,7 +567,7 @@ Return:
 
 ### 9.1 椭圆投影式子问题（与 KKT 笔记的联系）
 
-把点 $\mathbf{p}$ 投影到椭圆 $\{(x_1/a)^2+(x_2/b)^2\le 1\}$ 可视为 $\min \frac12\|\mathbf{x}-\mathbf{p}\|^2$ s.t. 凸不等式——见 [凸优化与 KKT 条件](../6.附录-数值计算与最优化/2019-07-14-凸优化与KKT条件.md) 例 3。Provably Good 框架把类似**凸约束**搬到每个配准点的 Jacobian 上，再传播到全域。
+把点 $\mathbf{p}$ 投影到椭圆 $\{(x_1/a)^2+(x_2/b)^2\le 1\}$ 可视为 $\min \frac12\lVert \mathbf{x}-\mathbf{p}\rVert ^2$ s.t. 凸不等式——见 [凸优化与 KKT 条件](../6.附录-数值计算与最优化/2019-07-14-凸优化与KKT条件.md) 例 3。Provably Good 框架把类似**凸约束**搬到每个配准点的 Jacobian 上，再传播到全域。
 
 ### 9.2 论文实验摘要
 
@@ -593,7 +593,7 @@ Return:
 | 策略 (14)–(17) | 认证 / 加密 $h$ / 反推 $K$ |
 | SOCP (18)(23)(26)、frame (25)(27) | Lipman 2012 凸化搬到 meshless |
 | 共形锥 (28a)(28b) | 共形 active 约束 |
-| $E_{\mathrm{pos}}$ (29)(30) | 手柄：$\sum\|\cdot\|_2$ + 辅助 $r_\ell$，与畸变锥同型 |
+| $E_{\mathrm{pos}}$ (29)(30) | 手柄：$\sum\lVert \cdot\rVert _2$ + 辅助 $r_\ell$，与畸变锥同型 |
 | $E_{\mathrm{bh}}, E_{\mathrm{arap}}$ (31)(33) | 正则：双调和二次 + frame 二次化 ARAP |
 | 策略 1–3 | 认证 / 加密 / 反推 $K$ |
 

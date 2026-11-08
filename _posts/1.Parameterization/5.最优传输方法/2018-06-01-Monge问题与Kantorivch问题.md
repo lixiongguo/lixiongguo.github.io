@@ -82,16 +82,16 @@ $$
 
 #### 二次代价下的 $c$-变换
 
-当代价 $c(x,y) = \frac{1}{2}\|x-y\|^2 = \frac{1}{2}\|x\|^2 + \frac{1}{2}\|y\|^2 - \langle x, y \rangle$ 时，
+当代价 $c(x,y) = \frac{1}{2}\lVert x-y\rVert ^2 = \frac{1}{2}\lVert x\rVert ^2 + \frac{1}{2}\lVert y\rVert ^2 - \langle x, y \rangle$ 时，
 
 $$
-\psi^c(x) = \frac{1}{2}\|x\|^2 + \inf_{y \in Y} \left\{ \frac{1}{2}\|y\|^2 - \psi(y) - \langle x, y \rangle \right\}.
+\psi^c(x) = \frac{1}{2}\lVert x\rVert ^2 + \inf_{y \in Y} \left\{ \frac{1}{2}\lVert y\rVert ^2 - \psi(y) - \langle x, y \rangle \right\}.
 $$
 
-若令凸函数 $\bar\psi(y) = \frac{1}{2}\|y\|^2 - \psi(y)$，则
+若令凸函数 $\bar\psi(y) = \frac{1}{2}\lVert y\rVert ^2 - \psi(y)$，则
 
 $$
-\psi^c(x) = \frac{1}{2}\|x\|^2 - \psi^*(x),
+\psi^c(x) = \frac{1}{2}\lVert x\rVert ^2 - \psi^*(x),
 $$
 
 其中 $\psi^*$ 是经典的 Legendre-Fenchel  变换。
@@ -116,10 +116,10 @@ $$
 
 二次代价可通过展开化为内积形式：
 $$
-c(x,y) = \frac{1}{2}\|x-y\|^2 = \frac{1}{2}\|x\|^2 - \langle x, y \rangle + \frac{1}{2}\|y\|^2.
+c(x,y) = \frac{1}{2}\lVert x-y\rVert ^2 = \frac{1}{2}\lVert x\rVert ^2 - \langle x, y \rangle + \frac{1}{2}\lVert y\rVert ^2.
 $$
 
-**Voronoi 与 Delaunay 作为 Legendre 对偶**：给定带权点 $(x_i, w_i)$，power 距离为 $\|x - x_i\|^2 - w_i = \|x\|^2 - 2\langle x, x_i \rangle + \|x_i\|^2 - w_i$。令 $\varphi_i = \tfrac{1}{2}(\|x_i\|^2 - w_i)$，定义分段线性凸函数
+**Voronoi 与 Delaunay 作为 Legendre 对偶**：给定带权点 $(x_i, w_i)$，power 距离为 $\lVert x - x_i\rVert ^2 - w_i = \lVert x\rVert ^2 - 2\langle x, x_i \rangle + \lVert x_i\rVert ^2 - w_i$。令 $\varphi_i = \tfrac{1}{2}(\lVert x_i\rVert ^2 - w_i)$，定义分段线性凸函数
 $$
 f(x) = \max_i \left[ \langle x, x_i \rangle - \varphi_i \right],
 $$
@@ -170,13 +170,13 @@ $$
 
 #### 二次代价：$c$-上微分 = 凸函数次微分
 
-当 $c(x,y) = \frac{1}{2}\|x-y\|^2$ 且 $\phi = \psi^c$ 为 Brenier 凸势时，条件 $\psi^c(x) + \psi(y) = c(x,y)$ 化为
+当 $c(x,y) = \frac{1}{2}\lVert x-y\rVert ^2$ 且 $\phi = \psi^c$ 为 Brenier 凸势时，条件 $\psi^c(x) + \psi(y) = c(x,y)$ 化为
 
 $$
-\phi(x) + \psi(y) = \frac{1}{2}\|x\|^2 + \frac{1}{2}\|y\|^2 - \langle x, y \rangle.
+\phi(x) + \psi(y) = \frac{1}{2}\lVert x\rVert ^2 + \frac{1}{2}\lVert y\rVert ^2 - \langle x, y \rangle.
 $$
 
-令 $\bar\phi(x) = \phi(x) - \frac{1}{2}\|x\|^2$、$\bar\psi(y) = \frac{1}{2}\|y\|^2 - \psi(y)$（均为凸函数），则取等号等价于
+令 $\bar\phi(x) = \phi(x) - \frac{1}{2}\lVert x\rVert ^2$、$\bar\psi(y) = \frac{1}{2}\lVert y\rVert ^2 - \psi(y)$（均为凸函数），则取等号等价于
 
 $$
 \bar\phi(x) + \bar\psi(y) = \langle x, y \rangle,
@@ -206,26 +206,26 @@ $$
 \partial^c \psi(x) = \arg\min_j \left[ c(x, y_j) - \psi_j \right]
 $$
 
-给出每个 $x$ 应被送往的目标点。对二次代价 $c(x,y) = \frac{1}{2}\|x-y\|^2$，使下确界取到的 $j$ 构成 **Laguerre / Power 单元**：
+给出每个 $x$ 应被送往的目标点。对二次代价 $c(x,y) = \frac{1}{2}\lVert x-y\rVert ^2$，使下确界取到的 $j$ 构成 **Laguerre / Power 单元**：
 
 $$
-L_j(\psi) = \left\{ x \;\middle|\; \|x - y_j\|^2 - \psi_j \leq \|x - y_k\|^2 - \psi_k,\; \forall k \right\}.
+L_j(\psi) = \left\{ x \;\middle|\; \lVert x - y_j\rVert ^2 - \psi_j \leq \lVert x - y_k\rVert ^2 - \psi_k,\; \forall k \right\}.
 $$
 
 这正是半离散 OT 把连续域分割为加权 Voronoi 单元的几何来源——每个 cell 内所有点共享同一个 $c$-上微分（同一目标原子 $y_j$）。
 
 #### $W_1$ 代价下的特化
 
-当代价 $c(x,y) = \|x - y\|$ 时，$c$-变换给出
+当代价 $c(x,y) = \lVert x - y\rVert $ 时，$c$-变换给出
 
 $$
-\psi^c(x) = \inf_{y \in Y} \left[ \|x - y\| - \psi(y) \right].
+\psi^c(x) = \inf_{y \in Y} \left[ \lVert x - y\rVert  - \psi(y) \right].
 $$
 
 此时 $\psi^c$ 自动 **1-Lipschitz**：对任意 $x, x'$，
 
 $$
-|\psi^c(x) - \psi^c(x')| \leq \|x - x'\|
+|\psi^c(x) - \psi^c(x')| \leq \lVert x - x'\rVert 
 $$
 
 （三角不等式直接推出）。Kantorovich-Rubinstein 对偶正是把一般对偶化简为单个 1-Lipschitz 函数 $f = -\psi^c$ 的情形——这也是 WGAN 中 critic 必须满足 Lipschitz 约束的来源。
@@ -237,18 +237,18 @@ $$
 WGAN（Arjovsky et al. 2017）是 Kantorovich 对偶在机器学习中最为人熟知的应用。原始 GAN 用 JS 散度度量分布距离，但两分布支撑不交时 JS 散度为常数 $\log 2$，梯度消失导致训练崩溃。WGAN 用 **Wasserstein-1 距离**替代 JS 散度：
 
 $$
-\boxed{W_1(P_r, P_g) = \min_{\pi \in \Pi(P_r,P_g)} \int \|x-y\| \, d\pi(x,y)}
+\boxed{W_1(P_r, P_g) = \min_{\pi \in \Pi(P_r,P_g)} \int \lVert x-y\rVert  \, d\pi(x,y)}
 $$
 
 ### Kantorovich-Rubinstein 对偶形式
 
-以上原始问题涉及高维耦合变量 $\pi$，难以直接计算。利用 Kantorovich 对偶（See §Kantorovich 对偶），当代价 $c(x,y) = \|x-y\|$ 时：
+以上原始问题涉及高维耦合变量 $\pi$，难以直接计算。利用 Kantorovich 对偶（See §Kantorovich 对偶），当代价 $c(x,y) = \lVert x-y\rVert $ 时：
 
 $$
-\boxed{W_1(P_r, P_g) = \sup_{\|f\|_L \leq 1} \Big[ \mathbb{E}_{x\sim P_r}[f(x)] - \mathbb{E}_{x\sim P_g}[f(x)] \Big]}
+\boxed{W_1(P_r, P_g) = \sup_{\lVert f\rVert _L \leq 1} \Big[ \mathbb{E}_{x\sim P_r}[f(x)] - \mathbb{E}_{x\sim P_g}[f(x)] \Big]}
 $$
 
-其中 $\|f\|_L \leq 1$ 表示 $f$ 是 1-Lipschitz 函数：$|f(x)-f(y)| \leq \|x-y\|$。推导来自一般对偶的化简——约束 $\phi(x)+\psi(y) \leq \|x-y\|$ 在 $W_1$ 代价下退化为 $\phi = -f,\; \psi = f$，且 $f$ 自动 1-Lipschitz。
+其中 $\lVert f\rVert _L \leq 1$ 表示 $f$ 是 1-Lipschitz 函数：$|f(x)-f(y)| \leq \lVert x-y\rVert $。推导来自一般对偶的化简——约束 $\phi(x)+\psi(y) \leq \lVert x-y\rVert $ 在 $W_1$ 代价下退化为 $\phi = -f,\; \psi = f$，且 $f$ 自动 1-Lipschitz。
 
 WGAN 中的 **critic**（或 discriminator）$f_w$ 正是 Kantorovich 势在 KR 对偶中的化身：$f$ 最大化 $\mathbb{E}_{P_r}[f] - \mathbb{E}_{P_g}[f]$，其梯度指导生成器的更新方向。
 
@@ -268,9 +268,9 @@ WGAN 中的 **critic**（或 discriminator）$f_w$ 正是 Kantorovich 势在 KR 
 |:---|:---|
 | Monge 问题 | 生成器 $G: z \mapsto x$（决定性的推前映射） |
 | Kantorovich 问题 | $W_1(P_r, P_g)$（Earth Mover's Distance） |
-| Kantorovich 对偶 | $W_1 = \sup_{\|f\|_L \leq 1} \mathbb{E}_{P_r}[f] - \mathbb{E}_{P_g}[f]$ |
+| Kantorovich 对偶 | $W_1 = \sup_{\lVert f\rVert _L \leq 1} \mathbb{E}_{P_r}[f] - \mathbb{E}_{P_g}[f]$ |
 | Kantorovich 势 $\phi,\psi$ | Critic $f$ |
-| 代价 $c(x,y)=\|x-y\|$ | 1-Wasserstein 距离的度量 |
+| 代价 $c(x,y)=\lVert x-y\rVert $ | 1-Wasserstein 距离的度量 |
 | 1-Lipschitz 约束 | Weight Clip / Gradient Penalty / Spectral Norm |
 
 > 生成器 $G(z)$ 天然是一个 **Monge 映射**——将低维噪声分布推前为数据分布。WGAN 用 Kantorovich 松弛度量该映射质量，用 critic 梯度改进映射。这是最优传输理论在深度学习中最直接的应用实例。

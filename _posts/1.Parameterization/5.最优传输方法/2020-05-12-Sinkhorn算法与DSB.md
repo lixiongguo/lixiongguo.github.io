@@ -137,7 +137,7 @@ Sinkhorn 看上去像静态离散算法，但它背后其实对应一个更深�
 薛定谔桥要求寻找路径测度 $Q$，使得
 
 $$
-\min_Q \operatorname{KL}(Q\|R),
+\min_Q \operatorname{KL}(Q\lVert R),
 $$
 
 subject to
@@ -158,7 +158,7 @@ $$
 $$
 \min_{\rho_t,v_t}
 \int_0^1\!\!\int
-\frac12 \|v_t(x)\|^2 \rho_t(x)\,dx\,dt
+\frac12 \rVert v_t(x)\lVert ^2 \rho_t(x)\,dx\,dt
 $$
 
 subject to
@@ -305,7 +305,7 @@ SB实际上是一个熵正则最优传输（entropy-regularized optimal transpor
 考虑参考过程 $p(z_{0:N})$（描述向数据添加噪声）。我们要找到过程 $\pi \in \mathcal{P}_{N+1}$，使得：
 
 $$
-\pi^\star = \arg\min_{\pi \in \mathcal{P}_{N+1}} \operatorname{KL}(\pi \| p)
+\pi^\star = \arg\min_{\pi \in \mathcal{P}_{N+1}} \operatorname{KL}(\pi \rVert  p)
 \quad \text{s.t.} \quad \pi_0 = p_{\text{data}},\; \pi_N = p_{\text{prior}}
 $$
 
@@ -333,13 +333,13 @@ $$
 
 定理
 
-> **Theorem 1.** 假设存在 $H > 0$ 使得对任意 $n$，有 $\operatorname{KL}(p_{\text{data}} \otimes p_{\text{prior}} \| p_{0,N}) \leq H$。则 DSB 迭代良定义，且 KL 散度单调递减。
+> **Theorem 1.** 假设存在 $H > 0$ 使得对任意 $n$，有 $\operatorname{KL}(p_{\text{data}} \otimes p_{\text{prior}} \lVert  p_{0,N}) \leq H$。则 DSB 迭代良定义，且 KL 散度单调递减。
 
 ![image-20251013205251119](https://lgximgs.oss-cn-beijing.aliyuncs.com/images/image-20251013205251119.png)
 
 通过薛定谔桥实现生成模型
 
-假设 $\pi^\star$ 已知，生成模型可通过从 $X_N \sim p_{\text{prior}}$ 采样，沿反向转移 $\{\pi_{k\|k+1}^\star\}$ 传播得到 $X_0$。
+假设 $\pi^\star$ 已知，生成模型可通过从 $X_N \sim p_{\text{prior}}$ 采样，沿反向转移 $\{\pi_{k\rVert k+1}^\star\}$ 传播得到 $X_0$。
 
 ![image-20251013192655633](https://lgximgs.oss-cn-beijing.aliyuncs.com/images/image-20251013192655633.png)
 
@@ -348,10 +348,10 @@ $$
 SB 问题一般没有闭式解，通过 **IPF (Iterative Proportional Fitting)** 求解。令 $\pi^0 = p$，交替投影：
 
 $$
-\pi^{2n+1} = \arg\min \operatorname{KL}(\pi \| \pi^{2n}) \quad\text{s.t. } \pi_0 = p_{\text{data}}
+\pi^{2n+1} = \arg\min \operatorname{KL}(\pi \lVert  \pi^{2n}) \quad\text{s.t. } \pi_0 = p_{\text{data}}
 $$
 $$
-\pi^{2n+2} = \arg\min \operatorname{KL}(\pi \| \pi^{2n+1}) \quad\text{s.t. } \pi_N = p_{\text{prior}}
+\pi^{2n+2} = \arg\min \operatorname{KL}(\pi \rVert  \pi^{2n+1}) \quad\text{s.t. } \pi_N = p_{\text{prior}}
 $$
 
 ![image-20251013193650843](https://lgximgs.oss-cn-beijing.aliyuncs.com/images/image-20251013193650843.png)
@@ -359,7 +359,7 @@ $$
 
 IPF方法与原问题的等价性
 
-> **Proposition 2.** 假设 $\operatorname{KL}(p_{\text{data}} \otimes p_{\text{prior}} \| p_{0,N}) < \infty$。则 IPF 序列收敛到 SB 解。
+> **Proposition 2.** 假设 $\operatorname{KL}(p_{\text{data}} \otimes p_{\text{prior}} \lVert  p_{0,N}) < \infty$。则 IPF 序列收敛到 SB 解。
 
 ![image-20251013194053850](https://lgximgs.oss-cn-beijing.aliyuncs.com/images/image-20251013194053850.png)
 
@@ -389,9 +389,9 @@ DSB 将 IPF 的每步投影转化为 **mean-matching** 损失：
 
 对 $\ell = 0,\dots,L-1$ :
 
-&emsp;1. 训练**前向**模型 $\theta^\ell$ 匹配 $\pi_{n-1\|n}^{2\ell}$ → 得到 $\pi^{2\ell+1}$
+&emsp;1. 训练**前向**模型 $\theta^\ell$ 匹配 $\pi_{n-1\rVert n}^{2\ell}$ → 得到 $\pi^{2\ell+1}$
 
-&emsp;2. 训练**反向**模型 $\phi^\ell$ 匹配 $\pi_{n-1\|n}^{2\ell+1}$ → 得到 $\pi^{2\ell+2}$
+&emsp;2. 训练**反向**模型 $\phi^\ell$ 匹配 $\pi_{n-1\lVert n}^{2\ell+1}$ → 得到 $\pi^{2\ell+2}$
 
 输出: 桥过程 $\pi^L$
 
@@ -403,7 +403,7 @@ DSB 将 IPF 的每步投影转化为 **mean-matching** 损失：
 
 > **Proposition 4.** 假设 KL 有界。则 $\{\pi^{2n}\}_n$ 和 $\{\pi^{2n+1}\}_n$ 是良定义的。KL 散度序列单调非增：
 > $$
-> \operatorname{KL}(\pi^{2n+2} \| \pi^{2n+1}) \leq \operatorname{KL}(\pi^{2n} \| \pi^{2n+1}) < \operatorname{KL}(\pi^{2n} \| \pi^{2n-1})
+> \operatorname{KL}(\pi^{2n+2} \rVert  \pi^{2n+1}) \leq \operatorname{KL}(\pi^{2n} \lVert  \pi^{2n+1}) < \operatorname{KL}(\pi^{2n} \rVert  \pi^{2n-1})
 > $$
 
 ![image-20251013194002903](https://lgximgs.oss-cn-beijing.aliyuncs.com/images/image-20251013194002903.png)
