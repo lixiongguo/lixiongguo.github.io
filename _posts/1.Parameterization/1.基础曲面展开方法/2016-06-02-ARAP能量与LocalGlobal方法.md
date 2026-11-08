@@ -1,4 +1,11 @@
-以下以刘立刚老师 2008 年 ARAP 参数化为例说明。先从一个简单算法（如 Tutte）初始化，然后交替进行如下两步——首先为每个三角形寻找一个尽量保持原形状的局部近似（**Local 优化**），再回头调整 Jacobian 矩阵使网格整体保持连接（**Global 优化**）。
+---
+layout: post
+title: "参数化变分能量"
+category: Parameterization
+categories: ["Parameterization", "Parameterization-BasicParameterization"]
+---
+
+先从一个简单算法（如 Tutte）初始化，然后交替进行如下两步——首先为每个三角形寻找一个尽量保持原形状的局部近似（**Local 优化**），再回头调整 Jacobian 矩阵使网格整体保持连接（**Global 优化**）。
 
 ![](https://lgximgs.oss-cn-beijing.aliyuncs.com/images/image-20251023215121312-1778207385711-1.png)
 
@@ -164,5 +171,3 @@ MIPS 仅阻止 $\sigma_i \to 0$（分母趋于零），而**对称 Dirichlet 同
 ## 参考文献
 
 [1] Liu, L., Zhang, L., Xu, Y., Gotsman, C., & Gortler, S. J. (2008). A local/global approach to mesh parameterization. *Computer Graphics Forum (SGP)*, 27(5), 1495–1504.
-
-**实验链接**：https://lixiongguo.github.io/uv-unwrap-simple.html
