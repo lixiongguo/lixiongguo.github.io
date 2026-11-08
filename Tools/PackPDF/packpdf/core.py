@@ -31,6 +31,22 @@ def _cjk_font() -> str:
     return 'SimSun'
 
 
+def _mono_font() -> str:
+    """代码块西文字体。
+
+    不能用 Latin Modern Mono：它没有希腊字母，代码里的 π、α 等会被静默丢弃，
+    `k * π / 2` 会渲染成 `k * /2`，语义直接坏掉。
+    """
+    font = os.environ.get('PACKPDF_MONO_FONT', '').strip()
+    if font:
+        return font
+    if sys.platform == 'darwin':
+        return 'Menlo'
+    if sys.platform.startswith('linux'):
+        return 'DejaVu Sans Mono'
+    return 'Consolas'
+
+
 @dataclass
 class MergeResult:
     success: bool
@@ -193,6 +209,19 @@ def _fix_latex(tex: str) -> str:
             r'\usepackage{graphicx}',
             r'\usepackage{graphicx}' + '\n' + r'\usepackage{float}',
         )
+    # 代码块要同时指定中西文等宽字体：西文沿用 Latin Modern Mono 时，
+    # 希腊字母（π 等）没有字形会被静默丢弃；中文不指定则退到比例宋体，
+    # 与等宽西文挤在一起导致缩进和列对不齐。
+    if r'\setCJKmonofont' not in tex:
+        cjk = _cjk_font()
+        anchor = r'\setCJKmainfont[]{%s}' % cjk
+        if anchor in tex:
+            tex = tex.replace(
+                anchor,
+                anchor + '\n'
+                + r'\setCJKmonofont[]{%s}' % cjk + '\n'
+                + r'\setmonofont[]{%s}' % _mono_font(),
+            )
     if r'\sloppy' not in tex:
         tex = tex.replace(r'\begin{document}', r'\sloppy' + '\n' + r'\begin{document}')
     return tex

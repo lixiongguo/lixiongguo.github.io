@@ -41,9 +41,53 @@ def _replace_norm_pipes(text: str) -> tuple[str, bool]:
     return ''.join(result), changed
 
 
+def _fix_inline_display(text: str) -> tuple[str, bool]:
+    """把夹在句子中间的 $$...$$ 降级为行内 $...$。
+
+    块级公式会独占一行居中，写在句子里会把整段话切碎。
+    整行只有 $$、或 $$...$$ 独占一行的才是真块级，保持不动。
+    """
+    out: list[str] = []
+    changed = False
+    in_fence = False
+
+    for line in text.split('\n'):
+        if line.lstrip().startswith('```'):
+            in_fence = not in_fence
+            out.append(line)
+            continue
+        if in_fence or '$$' not in line:
+            out.append(line)
+            continue
+
+        stripped = line.strip()
+        if not stripped or stripped == '$$':
+            out.append(line)
+            continue
+
+        positions = [m.start() for m in re.finditer(r'\$\$', line)]
+        if len(positions) % 2:  # 交给 dollar_pair 规则处理
+            out.append(line)
+            continue
+
+        lead = len(line) - len(line.lstrip())
+        trail = len(line.rstrip())
+        if positions[0] > lead or positions[-1] + 2 < trail:
+            out.append(line.replace('$$', '$'))
+            changed = True
+        else:
+            out.append(line)
+
+    return '\n'.join(out), changed
+
+
 def fix_text(text: str) -> tuple[str, list[str]]:
     """返回 (修复后文本, 变更说明列表)。"""
     changes: list[str] = []
+
+    text, inline_changed = _fix_inline_display(text)
+    if inline_changed:
+        changes.append('句中 $$ 降级为行内 $')
 
     double_fixed = re.sub(r'\\\(\$([^$]*)\$\\\)', r'$\1$', text)
     if double_fixed != text:

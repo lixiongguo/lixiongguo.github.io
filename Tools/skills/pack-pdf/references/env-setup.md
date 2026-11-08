@@ -33,6 +33,14 @@ python3 -m pip install oss2 PyPDF2 Pillow
 export PACKPDF_CJK_FONT="STSong"
 ```
 
+代码块另有一套字体：西文默认 `Menlo`，中文沿用上面的 CJK 字体。
+**不要用 Latin Modern Mono**——它没有希腊字母，代码里的 `π` 会被静默丢掉
+（`k * π / 2` 渲染成 `k * /2`）。要换：
+
+```bash
+export PACKPDF_MONO_FONT="DejaVu Sans Mono"
+```
+
 ## Windows
 
 - 安装 [Pandoc](https://pandoc.org/installing.html)。
@@ -58,6 +66,7 @@ export PACKPDF_CJK_FONT="Noto Serif CJK SC"
 |---|---|
 | `PACKPDF_HOME` | PackPDF 目录（含 `packpdf/`），用于定位工具 |
 | `PACKPDF_CJK_FONT` | 中文字体名，覆盖平台默认值 |
+| `PACKPDF_MONO_FONT` | 代码块西文字体名，默认 Menlo / DejaVu Sans Mono / Consolas；必须含希腊字母 |
 | `PACKPDF_EXTRA_PATH` | 追加到 PATH 的工具目录，`;` 或 `:` 分隔 |
 | `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` | 阿里云 OSS 凭证，仅上传图片时使用 |
 

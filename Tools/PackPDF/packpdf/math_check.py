@@ -82,6 +82,14 @@ CHECK_RULES: tuple[CheckRule, ...] = (
         correct='\\lVert v\\rVert^2  /  \\frac{x \\times g}{\\lVert x \\times g\\rVert}',
         reason='Liquid 模板引擎在预处理阶段处理 `|` 字符，即使位于 `$$` 或 `$` 块内也会被捕获，`\\lVert`/`\\rVert` 不会被误解析。',
     ),
+    CheckRule(
+        id='display_inline',
+        title='规则 9：不要把 $$ 夹在句子中间',
+        description='`$$...$$` 是块级公式，会被排版成独占一行并居中。写在句子里会把整段话切碎；行内公式应使用 `$...$`。',
+        wrong='即$$U=0$$的常映射',
+        correct='即 $U=0$ 的常映射',
+        reason='块级公式会强制换行居中，一句完整的中文会被拆成多行碎片，PDF 中表现为"我们将 / 分块为 / 其中"各占一行。',
+    ),
 )
 
 _RULE_BY_ID = {r.id: r for r in CHECK_RULES}
@@ -95,6 +103,7 @@ AUTO_FIXABLE_RULE_IDS = frozenset({
     'sub_cmd',
     'double_wrap',
     'norm_pipe',
+    'display_inline',
 })
 
 
@@ -260,6 +269,28 @@ def check_file(filepath: str | Path) -> list[CheckIssue]:
     for m in re.finditer(r'\\\|', text):
         ln = text[: m.start()].count('\n') + 1
         issues.append(_issue('norm_pipe', ln, '\\| 应改为 \\lVert / \\rVert 以避免 Liquid 管道符截断'))
+
+    # 规则 9：$$ 夹在句子中间会被当成块级公式，把完整句子切成碎片
+    in_fence = False
+    for idx, line in enumerate(lines, start=1):
+        if line.lstrip().startswith('```'):
+            in_fence = not in_fence
+            continue
+        if in_fence or '$$' not in line:
+            continue
+        stripped = line.strip()
+        if not stripped or stripped == '$$':
+            continue
+        positions = [m.start() for m in re.finditer(r'\$\$', line)]
+        if len(positions) % 2:  # 交给 dollar_pair 规则处理
+            continue
+        lead = len(line) - len(line.lstrip())
+        trail = len(line.rstrip())
+        if positions[0] > lead or positions[-1] + 2 < trail:
+            issues.append(_issue(
+                'display_inline', idx,
+                '$$ 夹在句子中间，会被排版成独占一行并切碎段落，应改为 $...$',
+            ))
 
     return issues
 

@@ -34,7 +34,9 @@ python scripts/pack.py doctor
 python scripts/pack.py check <PATH...>
 ```
 
-检查 8 条公式规范（`$` 前后空格、公式内裸中文、行内 cases、`$$` 内空行、`\sub`、双重包裹、`$$` 配对、`\|` 范数）以及图片引用是否存在。
+检查 9 条公式规范（`$` 前后空格、公式内裸中文、行内 cases、`$$` 内空行、`\sub`、双重包裹、`$$` 配对、`\|` 范数、**句中 `$$`**）以及图片引用是否存在。
+
+第 9 条最容易漏：`$$...$$` 是块级公式，会独占一行居中。写在句子里（`即$$U=0$$的常映射`）会把整段话切成碎片，PDF 里表现为"我们将 / 分块为 / 其中"各占一行。判定时排除代码块与合法的整行 `$$`。
 
 - 有公式问题先报告文件与行号；需要自动修复时使用 PackPDF 的 `fix_math.py`，**修改前先备份**。
 - `--posts` 才检查 Jekyll 的 `{% post_url %}` 引用，非博客仓库不要加。
@@ -79,7 +81,23 @@ python scripts/pack.py build <PATH...> --all -o drafts.pdf
 
 版式：目录名 → `#` 章标题（一级），frontmatter `title` → `##` 节标题（二级）。
 
-分页位置：章标题**前后各插一个 `\clearpage`**，标题独占一页，该章正文从下一页开始；`article` 模式下章内第二篇起每篇标题前也插 `\clearpage`。代码块里的 `#` 注释不会被当作标题。
+- 章首页：标题垂直居中、26pt 加粗、下方一条 0.42 倍版心宽细线，前后各分页，该章正文从下一页开始
+- 二级标题：全部居中，文章标题 `\Large`，正文小标题 `\large`（文章标题在合并时带 `<!--art-->` 标记，处理完即删）
+- 书名：只由 `\maketitle` 打印，不再生成 `\section`，目录里不会重复出现
+- 图片：注入 `\usepackage[export]{adjustbox}` + `max width=\linewidth, max height=0.85\textheight`，只缩不放，避免大图溢出压住正文
+- 代码块里的 `#` 注释不会被当作标题
+
+打包成功后会自动刷新同级的 `目录.md`（详见下节），`--no-toc` 可关闭。
+
+### 4.1 目录（markdown）
+
+```bash
+# 按现有成稿文章重新生成章节表格目录
+python scripts/pack.py toc <PATH...>
+python scripts/pack.py toc <PATH...> -o 目录.md --title "1. 参数化"
+```
+
+输出默认落在 `<PATH>/0.前言/目录.md`（存在时），否则 `<PATH>/目录.md`。格式：`# 书名 — 目录` + 每章 `## N. 章名` + `| 日期 | 文章 |` 表格，末尾统计篇数。书名沿用已有文件首行，不会每次改写。
 
 ### 5. 校验
 
@@ -94,16 +112,19 @@ python scripts/pack.py verify <out.pdf>
 | 项 | 说明 |
 |---|---|
 | 章节标题 | 目录名 `1.基础曲面展开方法` → `第一章 基础曲面展开方法`；`0.前言` → `前言` |
-| 文章标题 | 取 frontmatter 的 `title:`，没有则用文件名；渲染为二级标题，不进一级目录 |
+| 文章标题 | 取 frontmatter 的 `title:`，没有则用文件名；渲染为居中的二级标题 |
 | 分页 | `--page-break article`（默认）每篇另起页；`chapter` 仅每章另起页；`none` 不分页 |
-| 目录 | `--toc-depth=1`，只列章，条目即分页后的实际页码 |
+| PDF 目录 | `--toc-depth=1`，只列章 + 前言，条目即分页后的实际页码，标题为「目录」 |
+| md 目录 | 打包后自动刷新 `目录.md`，`--no-toc` 关闭；也可单独跑 `toc` 子命令 |
 | 中文字体 | 默认 macOS `Songti SC`、Linux `Noto Serif CJK SC`、Windows `SimSun`，可用 `--font` 覆盖 |
+| 代码块字体 | 西文 Menlo / DejaVu Sans Mono / Consolas（须含希腊字母），中文同 CJK 字体；可用 `PACKPDF_MONO_FONT` 覆盖 |
 | 输出默认位置 | `<PackPDF>/PDF_output/` |
 | 输出被占用 | 底层自动改存带时间戳的文件名，需在结果中明确告知 |
 
 ## 约束
 
-- **不修改 PackPDF 源码**；筛选、层级与分页通过运行时包装实现，字体通过 `PACKPDF_CJK_FONT` 环境变量传入。
+- **不复制 PackPDF 的实现**；筛选、层级与分页通过运行时包装实现。
+- 字体通过环境变量传入（`PACKPDF_CJK_FONT` / `PACKPDF_MONO_FONT`）。代码块的中西文等宽字体由 `packpdf/core.py` 的 `_fix_latex` 在编译前注入——Latin Modern Mono 缺希腊字母，代码里的 `π` 会被静默丢弃，这个修正必须留在管线内部而不是靠调用方传参。
 - 默认只打成稿；`--all` 只在用户明确要求打包草稿时使用，并在结果里说明混入了哪些非成稿文件。
 - 上传、替换路径、自动修复公式都会写文件，必须显式 `--apply`，且先备份。
 - 中文路径与空格一律用参数列表传递，不拼接 shell 字符串。

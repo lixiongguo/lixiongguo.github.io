@@ -14,6 +14,9 @@
 | `! Missing $ inserted` | 公式与正文边界错乱，常见于 `$` 紧贴中文 | 给 `$` 前后加空格 |
 | `! Extra }, or forgotten $` | `$$` 未配对 | 检查未闭合的公式块 |
 | 中文变成空白 / 豆腐块 | 字体不含 CJK 字形 | 换字体，不要用纯西文字体 |
+| 代码块里 `π`、`α` 等希腊字母消失（`k * π / 2` 渲染成 `k * /2`） | 代码块默认沿用 Latin Modern Mono，该字体没有希腊字母，缺字形被静默丢弃 | 管线已在 `_fix_latex` 自动改用 Menlo / DejaVu Sans Mono；要换字体设 `PACKPDF_MONO_FONT` |
+| 代码块里中文与等宽英文列对不齐、缩进跳动 | 没设 `\setCJKmonofont`，中文回退成比例宋体 | 管线已自动注入 `\setCJKmonofont`；仍异常时确认 `PACKPDF_CJK_FONT` 指向有全角字形的字体 |
+| PDF 里一句话被拆成多行碎片（「我们将」「分块为」「其中」各占一行），公式独占一行居中 | 句中误用了块级 `$$...$$`，被排版成 display math | `check` 规则 9 报 `display_inline`；`check --fix` 会自动降级为 `$...$` |
 | 图片位置空白 | 图片路径解析失败 | `images scan` 检查文件是否存在；远程图确认可访问 |
 | GIF 图片丢失 | 未安装 Pillow | `pip install Pillow` |
 | `无法写入 PDF（权限被拒绝）` | PDF 被阅读器占用、或 OneDrive 同步中 | 关闭阅读器；工具会自动改存带时间戳的文件 |

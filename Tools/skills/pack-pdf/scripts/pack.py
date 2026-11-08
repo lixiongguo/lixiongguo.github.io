@@ -560,6 +560,7 @@ def collect_chapters(paths, published_only: bool, root: Path):
     chapters: list[tuple[str, str]] = []
     excluded: list[tuple[Path, str]] = []
     staged: list[Path] = []
+    chapter_files: list[list[Path]] = []
 
     for raw in paths:
         p = Path(raw).expanduser().resolve()
@@ -572,6 +573,7 @@ def collect_chapters(paths, published_only: bool, root: Path):
             stage = stage_single(p, root)
             staged.append(stage)
             chapters.append((str(stage), p.stem))
+            chapter_files.append([p])
             continue
 
         if not p.is_dir():
@@ -594,8 +596,9 @@ def collect_chapters(paths, published_only: bool, root: Path):
             excluded.extend((f, exclude_reason(f)) for f in files if f not in kept)
             if kept:
                 chapters.append((str(d), chapter_label(d.name)))
+                chapter_files.append(kept)
 
-    return chapters, excluded, staged
+    return chapters, excluded, staged, chapter_files
 
 
 def install_selector(core, selector) -> None:
@@ -641,7 +644,8 @@ def install_layout(core, page_break: str = "article") -> None:
                 parts.append(f"{sep}\n\n{text}\n")
             else:
                 state["n"] += 1
-                parts.append(f"{sep}\n\n## {title}\n\n{text}\n")
+                # <!--art--> 标记文章标题，供分页/居中处理时与正文小标题区分
+                parts.append(f"{sep}\n\n## <!--art-->{title}\n\n{text}\n")
         return "".join(parts), len(files)
 
     core._merge_folder_content = merge_folder_content
@@ -687,6 +691,47 @@ def chapter_opening(title: str) -> list[str]:
     ]
 
 
+ARTICLE_MARK = "<!--art-->"
+
+# 图片默认只缩不放：超出版心宽/高的图等比缩小，避免溢出压住正文与标题
+GRAPHIC_LIMIT = "\\setkeys{Gin}{max width=\\linewidth,max height=0.85\\textheight}"
+
+
+def centered_subheading(title: str, article: bool = False) -> list[str]:
+    """二级标题居中排：文章标题用 Large 号，正文小标题用 large 号。"""
+    size = "\\Large" if article else "\\large"
+    t = _tex_escape(title)
+    return [
+        "",
+        "\\begin{center}",
+        "{" + size + "\\bfseries " + t + "}",
+        "\\end{center}",
+        "",
+    ]
+
+
+def install_graphic_limit(core) -> None:
+    """让 graphicx 接受 max width / max height：只在图片超出时缩小，不放大小图。
+
+    pandoc 的导言区拿不到，所以在生成的 .tex 里往 \\begin{document} 前插
+    \\usepackage[export]{adjustbox}，它给 \\includegraphics 增加这两个键。
+    """
+    original = core._fix_latex
+
+    def wrapped(tex):
+        tex = original(tex)
+        pre = ""
+        if "adjustbox" not in tex:
+            pre += "\\usepackage[export]{adjustbox}\n"
+        if "\\contentsname" not in tex:
+            pre += "\\renewcommand{\\contentsname}{目录}\n"
+        if pre and "\\begin{document}" in tex:
+            tex = tex.replace("\\begin{document}", pre + "\\begin{document}", 1)
+        return tex
+
+    core._fix_latex = wrapped
+
+
 def install_chapter_breaks(core, enabled: bool = True) -> None:
     """让每个章标题独占一页。
 
@@ -715,12 +760,21 @@ def install_chapter_breaks(core, enabled: bool = True) -> None:
             if stripped.startswith("```") or stripped.startswith("~~~"):
                 in_fence = not in_fence
             elif not in_fence and line.startswith("# "):
+                # 第一个一级标题是书名，已由 \maketitle 打印，不再生成 \section
                 if seen_title:
                     out.extend(chapter_opening(line[2:].strip()))
-                    continue
                 seen_title = True
+                continue
+            elif not in_fence and line.startswith("## "):
+                raw = line[3:].strip()
+                is_article = raw.startswith(ARTICLE_MARK)
+                if is_article:
+                    raw = raw[len(ARTICLE_MARK):].strip()
+                out.extend(centered_subheading(raw, is_article))
+                continue
             out.append(line)
 
+        out = [GRAPHIC_LIMIT, ""] + out
         try:
             with open(md_path, "w", encoding="utf-8") as fh:
                 fh.write("\n".join(out))
@@ -740,11 +794,115 @@ def resolve_published_only(args) -> bool:
     return True
 
 
+# ── 目录（markdown）─────────────────────────────────────────
+
+
+def _article_title(path: Path) -> str:
+    try:
+        head = path.read_text("utf-8")[:8192]
+    except (OSError, UnicodeDecodeError):
+        return path.stem
+    m = TITLE_RE.search(head)
+    return m.group(1) if m else path.stem
+
+
+def render_toc(chapters, chapter_files, book_title: str) -> tuple[str, int]:
+    """按现有成稿文章渲染章节表格目录（与仓库里 目录.md 的格式一致）。"""
+    lines = [f"# {book_title} — 目录", ""]
+    total = 0
+    for (folder, _label), files in zip(chapters, chapter_files):
+        name = Path(folder).name
+        heading = re.sub(r"^(\d+)\.\s*", r"\1. ", name)
+        lines += [f"## {heading}", "", "| 日期 | 文章 |", "|:---|:---|"]
+        for f in files:
+            m = re.match(r"^(\d{4}-\d{2}-\d{2})-(.+)\.md$", f.name)
+            if not m:
+                continue
+            total += 1
+            lines.append(f"| {m.group(1)} | [{_article_title(f)}]({f.name}) |")
+        lines.append("")
+    lines += [
+        "---",
+        "",
+        f"> 共 **{total}** 篇带日期前缀的文章，按章节分组排列。不含暂存/草稿/无日期文章。",
+        "",
+    ]
+    return "\n".join(lines), total
+
+
+def _existing_book_title(target: Path) -> str | None:
+    """沿用已有 目录.md 的首行书名，避免每次重写变样。"""
+    try:
+        first = target.read_text("utf-8").split("\n", 1)[0]
+    except (OSError, UnicodeDecodeError):
+        return None
+    m = re.match(r"^#\s+(.+?)\s+—\s+目录\s*$", first)
+    return m.group(1) if m else None
+
+
+def default_toc_path(paths) -> Path | None:
+    for raw in paths:
+        p = Path(raw).expanduser().resolve()
+        if not p.is_dir():
+            continue
+        pref = p / "0.前言" / "目录.md"
+        if pref.exists():
+            return pref
+        return p / "目录.md"
+    return None
+
+
+def sync_toc(paths, published_only: bool, root: Path, title: str | None = None) -> Path | None:
+    """打包后刷新已有 目录.md；文件不存在时不动（避免意外创建）。"""
+    target = default_toc_path(paths)
+    if target is None or not target.exists():
+        return None
+    chapters, _excluded, _staged, chapter_files = collect_chapters(paths, published_only, root)
+    if not chapters:
+        return None
+    book = title or _existing_book_title(target) or Path(paths[0]).expanduser().resolve().name
+    text, _total = render_toc(chapters, chapter_files, book)
+    try:
+        if target.read_text("utf-8") == text:
+            return target
+    except OSError:
+        pass
+    target.write_text(text, encoding="utf-8")
+    return target
+
+
+def cmd_toc(args) -> int:
+    root = load_packpdf()
+    published_only = resolve_published_only(args)
+    chapters, _excluded, _staged, chapter_files = collect_chapters(args.paths, published_only, root)
+    if not chapters:
+        return die("没有可写入目录的章节。")
+
+    if getattr(args, "output", None):
+        out = Path(args.output).expanduser().resolve()
+    else:
+        out = default_toc_path(args.paths)
+    if out is None:
+        return die("无法确定目录输出位置，用 -o 指定。")
+
+    book = (getattr(args, "title", None) or _existing_book_title(out)
+            or Path(args.paths[0]).expanduser().resolve().name)
+    text, total = render_toc(chapters, chapter_files, book)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    print(f"目录: {out}")
+    print(f"章节 {len(chapters)} 个 / 文章 {total} 篇")
+    if getattr(args, "json", False):
+        print(json.dumps({"toc": str(out), "chapters": len(chapters), "articles": total},
+                         ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_build(args) -> int:
     root = load_packpdf()
     published_only = resolve_published_only(args)
 
-    chapters, excluded, staged = collect_chapters(args.paths, published_only, root)
+    chapters, excluded, staged, _chapter_files = collect_chapters(args.paths, published_only, root)
 
     print(f"章节 {len(chapters)} 个" + ("（仅已成稿文章）" if published_only else "（全部 .md）"))
     for path, label in chapters:
@@ -782,6 +940,7 @@ def cmd_build(args) -> int:
         install_selector(core, is_published)
     page_break = getattr(args, "page_break", "article")
     install_layout(core, page_break)
+    install_graphic_limit(core)
     install_chapter_breaks(core, page_break != "none")
 
     if args.output:
@@ -813,6 +972,13 @@ def cmd_build(args) -> int:
         shutil.rmtree(s, ignore_errors=True)
 
     print(f"成功: {result.output_pdf}（{result.pages} 页，{result.size_kb:.1f} KB）")
+
+    if not getattr(args, "no_toc", False):
+        # 目录书名不跟 PDF 的 --title 走，沿用 目录.md 已有首行
+        refreshed = sync_toc(args.paths, published_only, root, None)
+        if refreshed:
+            print(f"目录已按现有文章更新: {refreshed}")
+
     if args.json:
         print(json.dumps({
             "success": True, "output": result.output_pdf,
@@ -898,9 +1064,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--page-break", choices=["article", "chapter", "none"], default="article",
                    help="分页粒度：article=每篇另起页（默认），chapter=仅每章另起页，none=不分页")
     p.add_argument("--list-only", action="store_true", help="只列入选/排除清单")
+    p.add_argument("--no-toc", action="store_true", help="打包后不刷新同目录的 目录.md")
     p.add_argument("--max-issues", type=int, default=40)
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_build)
+
+    p = sub.add_parser("toc", help="按现有成稿文章生成章节目录（markdown）")
+    p.add_argument("paths", nargs="+")
+    p.add_argument("-o", "--output", help="输出文件，默认 <路径>/0.前言/目录.md")
+    p.add_argument("--title", help="目录首行书名")
+    p.add_argument("--all", action="store_true", help="连草稿一起列入（调试用）")
+    p.add_argument("--published-only", action="store_const", const=True, default=None)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_toc)
 
     p = sub.add_parser("verify", help="校验生成的 PDF")
     p.add_argument("pdf")
