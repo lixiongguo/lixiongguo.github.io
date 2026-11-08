@@ -32,6 +32,9 @@ scripts/_pdf_images
 # Blender 场景文件太大了，不提交
 assets/renderer/CausticsLens/
 **.pdf
+# PDF 产物与自动修复留下的备份
+Tools/PackPDF/PDF_output/
+*.md.bak
 **/bin/
 
 scripts/AccessKey.csv
