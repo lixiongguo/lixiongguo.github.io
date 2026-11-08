@@ -19,26 +19,39 @@ class MathFixResult:
 
 
 def _replace_norm_pipes(text: str) -> tuple[str, bool]:
-    """将 \\|...\\| 范数替换为 \\lVert...\\rVert，平衡配对。"""
-    result: list[str] = []
-    i = 0
+    """将 \\|...\\| 范数替换为 \\lVert...\\rVert，平衡配对。
+
+    代码块里的 `\\|` 往往是 ASCII 作图（网格示意图之类），不是范数，跳过不动。
+    """
     expect_open = True
     changed = False
-    while i < len(text):
-        if text[i:i+2] == '\\|':
-            # 仅在非转义（前非 \\l、\\r 等）时才视为范数
-            if expect_open:
-                result.append('\\lVert ')
-                expect_open = False
+    in_fence = False
+    out_lines: list[str] = []
+    for line in text.split('\n'):
+        if line.lstrip().startswith(('```', '~~~')):
+            in_fence = not in_fence
+            out_lines.append(line)
+            continue
+        if in_fence or '\\|' not in line:
+            out_lines.append(line)
+            continue
+        buf: list[str] = []
+        i = 0
+        while i < len(line):
+            if line[i:i+2] == '\\|':
+                if expect_open:
+                    buf.append('\\lVert ')
+                    expect_open = False
+                else:
+                    buf.append('\\rVert ')
+                    expect_open = True
+                changed = True
+                i += 2
             else:
-                result.append('\\rVert ')
-                expect_open = True
-            changed = True
-            i += 2
-        else:
-            result.append(text[i])
-            i += 1
-    return ''.join(result), changed
+                buf.append(line[i])
+                i += 1
+        out_lines.append(''.join(buf))
+    return '\n'.join(out_lines), changed
 
 
 def _fix_inline_display(text: str) -> tuple[str, bool]:

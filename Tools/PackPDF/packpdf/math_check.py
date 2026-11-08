@@ -220,6 +220,17 @@ def check_file(filepath: str | Path) -> list[CheckIssue]:
     issues: list[CheckIssue] = []
     lines = text.split('\n')
 
+    # 代码块内的反斜杠不是公式，规则 8 之类的纯文本扫描据此跳过
+    fence_lines: set[int] = set()
+    in_fence = False
+    for idx, line in enumerate(lines, start=1):
+        if line.lstrip().startswith(('```', '~~~')):
+            fence_lines.add(idx)
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            fence_lines.add(idx)
+
     def _line_text(line_num: int | None) -> str:
         if line_num and 1 <= line_num <= len(lines):
             return lines[line_num - 1].strip()
@@ -268,6 +279,8 @@ def check_file(filepath: str | Path) -> list[CheckIssue]:
 
     for m in re.finditer(r'\\\|', text):
         ln = text[: m.start()].count('\n') + 1
+        if ln in fence_lines:  # 代码块里的 \| 是绘图字符，不是范数
+            continue
         issues.append(_issue('norm_pipe', ln, '\\| 应改为 \\lVert / \\rVert 以避免 Liquid 管道符截断'))
 
     # 规则 9：$$ 夹在句子中间会被当成块级公式，把完整句子切成碎片
