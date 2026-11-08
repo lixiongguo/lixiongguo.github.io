@@ -18,7 +18,7 @@ $$
 对于整个三角网格，累加所有三角形的差异得到一个如下的能量函数，这个就是我们要优化的能量函数
 
 $$
-E_{ARAP}=\sum_{t}A_t\|J_t-L_t\|_F^2,\quad L_t\in\Omega_s
+E_{ARAP}=\sum_{t}A_t\lVert J_t-L_t\rVert _F^2,\quad L_t\in\Omega_s
 \tag{4}
 $$
 
@@ -32,13 +32,13 @@ $$
 L_t^* = \arg\min_{L_t\in\Omega_s}\{d(J_t,L_t)\}
 $$
 
-注意到 $\|J_t-L_t\|_F^2=\mathrm{tr}((J_t-L_t)^T(J_t-L_t))$。这是经典的 **Procrustes 问题**：
+注意到 $\lVert J_t-L_t\rVert _F^2=\mathrm{tr}((J_t-L_t)^T(J_t-L_t))$。这是经典的 **Procrustes 问题**：
 
 在相似变换族 $\Omega_s=\{sR\mid s>0,\,R\in SO(2)\}$ 中，找与给定矩阵 $J_t$ Frobenius 距离最近的 $L_t$。
 
 **Procrustes 解法.** 对 $J_t$ 作 SVD：$J_t=U\Sigma V^T$，$\Sigma=\mathrm{diag}(\sigma_1,\sigma_2)$。
 
-但一般 SVD 只保证 $U,V$是正交的但未必是旋转矩阵。$\det(U)\det(V)=-1$ 时 $UV^T$ 含反射。
+但一般 SVD 只保证 $U,V$ 是正交的但未必是旋转矩阵。$\det(U)\det(V)=-1$ 时 $UV^T$ 含反射。
 
 ARAP 要求 $L_t=sR$ 中的 $R$ 为保定向旋转，故需 **Signed SVD**：
 
@@ -82,8 +82,8 @@ $$
 
 $$
 \begin{aligned}
-E_{\text{ARAP}}(u,L) = \frac{1}{2}\sum_{t=1}^T\sum_{i=0}^2\cot(\theta_t^i)\|(u_t^i-u_t^{i+1})-L_t(x_t^i-x_t^{i+1})\|^2\\
-=\frac{1}{2} \sum_{he_{ij}}\cot(\theta_{ij})\|(u^i-u^j)-L_t(x^i-x^j)\|^2\\
+E_{\text{ARAP}}(u,L) = \frac{1}{2}\sum_{t=1}^T\sum_{i=0}^2\cot(\theta_t^i)\lVert (u_t^i-u_t^{i+1})-L_t(x_t^i-x_t^{i+1})\rVert ^2\\
+=\frac{1}{2} \sum_{he_{ij}}\cot(\theta_{ij})\lVert (u^i-u^j)-L_t(x^i-x^j)\rVert ^2\\
 \end{aligned}
 $$
 
@@ -102,7 +102,7 @@ $$
 上述 ARAP 优化的能量
 
 $$
-E_{\text{ARAP}} = \sum_{t} A_t \, \|J_t - L_t\|_F^2, \quad L_t \in \Omega_s
+E_{\text{ARAP}} = \sum_{t} A_t \, \lVert J_t - L_t\rVert _F^2, \quad L_t \in \Omega_s
 $$
 
 其本质是**等距（isometry）能量**的另一种等价表述。
@@ -110,13 +110,13 @@ $$
 将 $J_t$ 的 SVD 分解记为 $J_t = U\Sigma V^\top$，其中 $\Sigma = \mathrm{diag}(\sigma_1, \sigma_2)$。则：
 
 $$
-\|J_t - L_t\|_F^2 = \|U\Sigma V^\top - U\,\hat{\Sigma}\,V^\top\|_F^2 = \|\Sigma - \hat{\Sigma}\|_F^2
+\lVert J_t - L_t\rVert _F^2 = \lVert U\Sigma V^\top - U\,\hat{\Sigma}\,V^\top\rVert _F^2 = \lVert \Sigma - \hat{\Sigma}\rVert _F^2
 $$
 
 其中 $\hat{\Sigma} = sI$ 是相似变换对应的奇异值矩阵（均匀缩放 $s$）。展开得：
 
 $$
-\|\Sigma - sI\|_F^2 = (\sigma_1 - s)^2 + (\sigma_2 - s)^2
+\lVert \Sigma - sI\rVert _F^2 = (\sigma_1 - s)^2 + (\sigma_2 - s)^2
 $$
 
 
@@ -139,12 +139,12 @@ $$
 
 若直接对 $\sigma_1, \sigma_2$ 做优化，需要反复 SVD 分解且无法得到闭式梯度，难以高效求解。因此 MIPS 的关键在于**用 Jacobian 矩阵的代数不变量消去 SVD**。
 
-利用恒等式 $\sigma_1^2 + \sigma_2^2 = \|J_t\|_F^2$ 和 $\sigma_1\sigma_2 = \det(J_t)$：
+利用恒等式 $\sigma_1^2 + \sigma_2^2 = \lVert J_t\rVert _F^2$ 和 $\sigma_1\sigma_2 = \det(J_t)$：
 
 $$
 E_{\text{MIPS}} = \frac{\sigma_1}{\sigma_2} + \frac{\sigma_2}{\sigma_1}
 = \frac{\sigma_1^2 + \sigma_2^2}{\sigma_1 \sigma_2}
-= \frac{\|J_t\|_F^2}{\det(J_t)}
+= \frac{\lVert J_t\rVert _F^2}{\det(J_t)}
 $$
 
 对每个三角形 $t$，$J_t$ 的分量是 UV 坐标的线性函数，因此 $E_{\text{MIPS}}$ 变为 UV 坐标的**有理函数**——分子是二次型，分母是三角形面积（亦为 UV 坐标的双线性形式）。
@@ -152,7 +152,7 @@ $$
 对三角网格，总能量为按面积加权的求和：
 
 $$
-E_{\text{MIPS}} = \sum_{t} A_t^{\text{3D}} \cdot \frac{\|J_t\|_F^2}{\det(J_t)}
+E_{\text{MIPS}} = \sum_{t} A_t^{\text{3D}} \cdot \frac{\lVert J_t\rVert _F^2}{\det(J_t)}
 $$
 
 其中 $A_t^{\text{3D}}$ 是三角面片 $t$ 在原始 3D 曲面上的面积。$\det(J_t) > 0$ 保证无翻转，因此 MIPS 是**自障碍函数**（self-barrier）：翻转时 $\det(J_t) \to 0^+$ 导致能量趋于无穷大。
@@ -164,7 +164,7 @@ E_{\text{MIPS}} = \frac{\sigma_1}{\sigma_2} + \frac{\sigma_2}{\sigma_1},\qquad
 E_{\text{SD}} = \sigma_1^2 + \sigma_2^2 + \sigma_1^{-2} + \sigma_2^{-2}
 $$
 
-MIPS 仅阻止 $\sigma_i \to 0$（分母趋于零），而**对称 Dirichlet 同时阻止压缩（$\sigma_i \to 0$）和拉伸（$\sigma_i \to \infty$）**，因此对等距性的约束更强。在实践上，对称 Dirichlet 是更稳健的选择，但 MIPS 的化简形式 $\|J_t\|_F^2 / \det(J_t)$ 因其简洁性在教学中被广泛引用。
+MIPS 仅阻止 $\sigma_i \to 0$（分母趋于零），而**对称 Dirichlet 同时阻止压缩（$\sigma_i \to 0$）和拉伸（$\sigma_i \to \infty$）**，因此对等距性的约束更强。在实践上，对称 Dirichlet 是更稳健的选择，但 MIPS 的化简形式 $\lVert J_t\rVert _F^2 / \det(J_t)$ 因其简洁性在教学中被广泛引用。
 
 
 
