@@ -402,13 +402,3 @@ repeat until ‖∇Ψ‖ < tol:
 | 闭式一半 | twist $\mathbf{t}$、flip $\mathbf{l}$ 及 $\lambda$（式 10–11） |
 | 剩余 | scaling 矩阵 $\mathbf{A}$；ARAP 解耦，MIPS 二次方程 |
 | 应用 | PSD 投影 + 牛顿；ARAP / MIPS / Symmetric Dirichlet 等 |
-
----
-
-## 参考文献
-
-- Smith B., de Goes F., Kim T. *Analytic eigensystems for isotropic distortion energies*. ACM TOG, 2019.
-- Chao I., et al. *A simple geometric model for elastic deformations*. SIGGRAPH 2010.
-- Sorkine O., Alexa M. *As-rigid-as-possible surface modeling*. SGP 2007.
-- Rabinovich M., et al. *Scalable locally injective mappings*. SIGGRAPH 2017.
-- Kovalsky S., et al. *Accelerated quadratic proxy for geometric optimization*. SIGGRAPH 2016.

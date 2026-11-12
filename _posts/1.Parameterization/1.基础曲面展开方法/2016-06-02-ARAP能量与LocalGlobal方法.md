@@ -165,9 +165,3 @@ E_{\text{SD}} = \sigma_1^2 + \sigma_2^2 + \sigma_1^{-2} + \sigma_2^{-2}
 $$
 
 MIPS 仅阻止 $\sigma_i \to 0$（分母趋于零），而**对称 Dirichlet 同时阻止压缩（$\sigma_i \to 0$）和拉伸（$\sigma_i \to \infty$）**，因此对等距性的约束更强。在实践上，对称 Dirichlet 是更稳健的选择，但 MIPS 的化简形式 $\lVert J_t\rVert _F^2 / \det(J_t)$ 因其简洁性在教学中被广泛引用。
-
-
-
-## 参考文献
-
-[1] Liu, L., Zhang, L., Xu, Y., Gotsman, C., & Gortler, S. J. (2008). A local/global approach to mesh parameterization. *Computer Graphics Forum (SGP)*, 27(5), 1495–1504.
