@@ -18,7 +18,7 @@ AQP（Accelerated Quadratic Proxy）针对大规模几何能量优化中的**病
 
 与 L-BFGS 相比，AQP 不存储多步历史、不需求 Hessian，只用到**前两步**的迭代结果；实验上迭代次数常少一个数量级以上。对 ARAP 能量，无加速版退化为 [Liu et al. 2008] 的 local/global 算法。
 
-与 [SLIM](几何优化-SLIM.md) 的关系：二者都利用**二次代理**思想，但路线不同——SLIM 为 flip-preventing 能量设计**矩阵加权**代理 + 受限线搜索；AQP 将 Laplacian 二次项**全局**并入预条件，再叠加 Nesterov 加速，更适合 ARAP、ISO、CONF 等经典能量。
+与 [SLIM](SLIM.md) 的关系：二者都利用**二次代理**思想，但路线不同——SLIM 为 flip-preventing 能量设计**矩阵加权**代理 + 受限线搜索；AQP 将 Laplacian 二次项**全局**并入预条件，再叠加 Nesterov 加速，更适合 ARAP、ISO、CONF 等经典能量。
 
 ---
 
@@ -236,7 +236,7 @@ $L$ 在网格尺寸 $\delta$ 上条件数约 $\delta^{-2}$；把 Dirichlet 二�
 ## 4. 凸二次代理
 
 
-对逐元素能量 $\mathcal{D}(J)$，构造凸二次代理 $\mathcal{P}^{R_f^k}(J)$，满足三条性质（与 SLIM 中 ARAP 代理相同，见 [几何优化-SLIM](几何优化-SLIM.md) §2.1、§4）：
+对逐元素能量 $\mathcal{D}(J)$，构造凸二次代理 $\mathcal{P}^{R_f^k}(J)$，满足三条性质（与 SLIM 中 ARAP 代理相同，见 [几何优化-SLIM](SLIM.md) §2.1、§4）：
 
 | 性质                   | 公式                                                         | 含义             |
 | :--------------------- | :----------------------------------------------------------- | :--------------- |
@@ -437,4 +437,4 @@ AQP 将几何优化拆为 **Laplacian 二次项 + 非线性余项**，在 Nester
 - Nesterov Y. *A method for solving the convex programming problem with convergence rate $O(1/k^2)$*. 1983.
 - Liu T., et al. *A local/global approach to mesh parameterization*. CGF 2008.
 - Smith J., Schaefer S. *Bijective parameterization with free boundaries*. SIGGRAPH 2015.
-- Rabinovich M., et al. *Scalable Locally Injective Mappings*. SIGGRAPH 2017.（矩阵加权代理，见本站 [SLIM](几何优化-SLIM.md)）
+- Rabinovich M., et al. *Scalable Locally Injective Mappings*. SIGGRAPH 2017.（矩阵加权代理，见本站 [SLIM](SLIM.md)）

@@ -29,7 +29,7 @@ $A_f$ 为面积权重，$\mathcal{D}$ 为畸变度量。
 - **Local**：$R_f^k = R(J_f(x^{k-1}))$（SVD：$J=USV^T$，取 $R=UV^T$）
 - **Global**：$\displaystyle x^k = \arg\min_x \sum_f A_f \lVert J_f(x) - R_f^k\rVert _F^2 + \lambda \lVert x - x^{k-1}\rVert ^2$
 
-ARAP 的二次代理 $P_R(J)=\lVert J-R\rVert _F^2$ 满足 Majorizer、梯度匹配、最近极小点三条性质（与 [AQP](几何优化-AQP.md) §3 相同），每步保证能量下降，但**不保证无翻转**。
+ARAP 的二次代理 $P_R(J)=\lVert J-R\rVert _F^2$ 满足 Majorizer、梯度匹配、最近极小点三条性质（与 [AQP](AQP.md) §3 相同），每步保证能量下降，但**不保证无翻转**。
 
 ### 2.2 对称 Dirichlet（SLIM 默认）
 

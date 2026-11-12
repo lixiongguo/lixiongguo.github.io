@@ -12,7 +12,8 @@
 | `packpdf_check` | 公式规范 + 本地图片引用（可选 post_url 引用） | 无 |
 | `packpdf_images_scan` | 列出本地图片引用及文件是否存在 | 无 |
 | `packpdf_images_upload` | 上传到 OSS 并替换 md 路径 | `apply=true` 时改写文件 |
-| `packpdf_build_pdf` | 合并编译 PDF | 写 `build/` 与输出 PDF |
+| `packpdf_toc` | 按成稿规则重建章节 markdown 目录 | 写 / 新建 `0.前言/目录.md` |
+| `packpdf_build_pdf` | 编译前重建目录、自动加封面页，再合并编译 PDF | 写 `目录.md`、`build/` 与输出 PDF |
 | `packpdf_verify` | 校验 PDF 完整性 | 无 |
 
 ## 安装
@@ -116,6 +117,8 @@ MCP 只负责调用，**工具链必须装在运行 server 的那台机器上**�
 ## 设计约束
 
 - **stdout 只走协议**：`pack.py` 的 `print` 在调用期间被重定向到缓冲区，随返回值带回；启动日志写 stderr。
+- **目录先于编译**：`packpdf_build_pdf` 在编译前按同一套成稿规则（日期前缀 + frontmatter）重建 `目录.md`，`toc=false` 关闭；`list_only=true` 只列名单，不写目录。返回值的 `toc` 字段是本次写入的目录路径。
+- **封面自动加**：`packpdf_build_pdf` 会自动找 `<路径>/0.前言/封面.jpg` 并插入一页整版封面，`cover_fit="cover"` 居中裁剪铺满版心、`"contain"` 保留原图；`cover=""` 关闭。返回值 `cover` 字段带上实际用的图与尺寸。
 - **构建串行**：`packpdf_build_pdf` 持有进程内锁，避免并发写 `build/merged.md`。
 - **写操作默认关闭**：`packpdf_images_upload` 默认 `apply=false`，只有显式传 `true` 才上传并改写 md，且自动生成 `.bak`。
 - **密钥不进配置**：OSS 凭证只从环境变量读取，不要写进 `mcp.json`。

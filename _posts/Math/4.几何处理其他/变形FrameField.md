@@ -114,7 +114,7 @@ $$
 \mathbf{W}_2^{\text{(在 }\mathbf{B}_1\text{ 下)}} = \mathbf{R}_{12}\, \mathbf{W}_2\, \mathbf{R}_{12}^T
 $$
 
-之后才能在同一参考系下比较 $\mathbf{x}_1$ 与 $\mathbf{x}_2$、$\mathbf{W}_1$ 与传输后的 $\mathbf{W}_2$，计算平滑能量。这与 [向量场介绍](2017-08-01-向量场介绍.md) 中 quarter-turn matching 的精神一致：先消除基底差异，再比较方向。
+之后才能在同一参考系下比较 $\mathbf{x}_1$ 与 $\mathbf{x}_2$、$\mathbf{W}_1$ 与传输后的 $\mathbf{W}_2$，计算平滑能量。这与 [向量场介绍](../../1.Parameterization/4.全局参数化与四边形网格化/2017-08-01-向量场介绍.md) 中 quarter-turn matching 的精神一致：先消除基底差异，再比较方向。
 
 ---
 
@@ -185,7 +185,7 @@ $$
 \Bigr)(p_j - p_i)
 $$
 
-$\mathbf{L}$ 为标准 cotan Laplacian；$t(i,j)$ 为半边 $(p_j-p_i)$ 左侧的三角形；$\theta_{ij}$ 为该三角形中与此半边相对的角。令 $\nabla\mathcal{E}=0$ 即 $\mathbf{L}\mathbf{p}'=\mathbf{b}$——与 [AQP](../3.几何优化方法/几何优化-AQP.md) 中 QP 步的 Laplacian 结构同源。
+$\mathbf{L}$ 为标准 cotan Laplacian；$t(i,j)$ 为半边 $(p_j-p_i)$ 左侧的三角形；$\theta_{ij}$ 为该三角形中与此半边相对的角。令 $\nabla\mathcal{E}=0$ 即 $\mathbf{L}\mathbf{p}'=\mathbf{b}$——与 [AQP](AQP.md) 中 QP 步的 Laplacian 结构同源。
 
 **初始化**：$\mathbf{p}'$ 取原网格顶点；$\mathbf{Q}$ 取接近单位阵的小随机旋转（帮助零曲率区域避免坏局部极小）。变形中自交（如 Figure 1 耳朵）可接受，无需特殊处理。
 
