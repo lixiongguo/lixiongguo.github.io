@@ -318,7 +318,7 @@ $$
 - $\lambda_i \leftarrow \max(\lambda_i,\varepsilon)$（默认 $\varepsilon>0$），或
 - $\lambda_i < 0$ 时取 $|\lambda_i|$（`projection_eps < 0`）。
 
-再散射得到全局 $\mathbf{H}^+$，用于投影牛顿 $ \mathbf{H}^+ \Delta\mathbf{x} = -\mathbf{g}$。对 $k\le 12$ 的稠密特征分解极便宜；这与 [解析 Eigensystem](../../1.Parameterization/3.几何优化方法/2018-02-15-2阶优化方法-AnalyticalEigen.md) 的闭式 per-quadrature 投影是不同路线（通用能量 vs 各向同性闭式）。
+再散射得到全局 $\mathbf{H}^+$，用于投影牛顿 $ \mathbf{H}^+ \Delta\mathbf{x} = -\mathbf{g}$。对 $k\le 12$ 的稠密特征分解极便宜；这与 [解析 Eigensystem](../../1.Parameterization/2.几何优化方法/2018-02-15-能量的Hessian投影.md) 的闭式 per-quadrature 投影是不同路线（通用能量 vs 各向同性闭式）。
 
 ### 7.5 向量值目标 `VectorFunction`
 
@@ -388,13 +388,13 @@ x ← Tutte 初值
 | ADOL-C | 反向 | ✓ | 需 retape | 着色推断 |
 | ACORNS | 变换 | ✓ | 受限 | 需额外集成 |
 | PyTorch | 反向 | 可能 | 动态图 | 稠密张量 |
-| [Analytical Eigensystem](../../1.Parameterization/3.几何优化方法/2018-02-15-2阶优化方法-AnalyticalEigen.md) | 解析 | ✓ | — | 各向同性能量闭式 |
+| [Analytical Eigensystem](../../1.Parameterization/2.几何优化方法/2018-02-15-能量的Hessian投影.md) | 解析 | ✓ | — | 各向同性能量闭式 |
 | 手工推导 | — | ✓ | — | 最快但难维护 |
 
 | 笔记 | 联系 |
 | :--- | :--- |
-| [SLIM](SLIM.md) | 局部-全局代理；TinyAD 可装真能量试原型 |
-| [AQP](AQP.md) | 二次代理加速；TinyAD 提供真 Hessian |
+| [SLIM](../../1.Parameterization/2.几何优化方法/2018-01-02-可扩展局部单射映射-SLIM.md) | 局部-全局代理；TinyAD 可装真能量试原型 |
+| [AQP](../../1.Parameterization/2.几何优化方法/2018-01-03-加速二次代理-AQP.md) | 二次代理加速；TinyAD 提供真 Hessian |
 | [ShapeUp](几何优化-ShapeUp.md) | 约束投影不求导；TinyAD 负责可微能量 |
 
 **何时不用 TinyAD**：单元素 $k$ 很大、仅需一阶且 $n$ 极大时，反向或解析雅可比可能更合适。
