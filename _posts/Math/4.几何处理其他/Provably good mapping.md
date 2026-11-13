@@ -599,7 +599,7 @@ Return:
 
 **局限**：基需已知 $\omega_{\nabla\varphi}$；非凸域可用欧氏距离版分析；3D 推广见 Lipman 后续工作（有界畸变调和映射、3D 单射映射等）。
 
-**相关笔记**：[MLS / 梯度域变形](几何变形1-梯度域方法.md)、[AKAP 平面变形](AKAF.md)、[AQP](../../1.Parameterization/2.几何优化方法/2018-01-03-加速二次代理-AQP.md)、[SLIM](../../1.Parameterization/2.几何优化方法/2018-01-02-可扩展局部单射映射-SLIM.md)、[TinyAD](几何优化-TinyAD.md)（可微能量原型）、[凸优化与 KKT](../6.附录-数值计算与最优化/2019-07-14-凸优化与KKT条件.md)。
+**相关笔记**：[MLS / 梯度域变形](几何变形.md)、[AKAP 平面变形](AKAF.md)、[AQP](../../1.Parameterization/2.几何优化方法/2018-01-03-加速二次代理-AQP.md)、[SLIM](../../1.Parameterization/2.几何优化方法/2018-01-02-可扩展局部单射映射-SLIM.md)、[TinyAD](几何优化-TinyAD.md)（可微能量原型）、[凸优化与 KKT](../6.附录-数值计算与最优化/2019-07-14-凸优化与KKT条件.md)。
 
 ---
 

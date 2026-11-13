@@ -1,12 +1,6 @@
 # ARAP 变形（As-Rigid-As-Possible）
 
-> 前情：梯度能量与双调和能量都用线性微分特征（$\nabla\mathbf{p}$、$\Delta\mathbf{p}$）度量扭曲，二者都不具旋转不变性——把整个形状做一次刚性变换，能量并不为零。详见 [几何变形](几何变形.md) 的"乐极生悲"一节。
-
-## 0. 符号
-
 三角网格 $S=(\mathbf{P},E)$：静止顶点 $\mathbf{p}_i$，变形后的未知顶点 $\mathbf{p}'_i$（$i=1,\ldots,n$），边 $(i,j)\in E$，$N(i)$ 为顶点 $i$ 的一环邻居。每个顶点配一个未知旋转 $\mathbf{R}_i\in SO(3)$。手柄顶点要求 $\mathbf{p}'_k=\mathbf{q}_k$，$\mathbf{q}_k$ 为用户拖到的位置。
-
-## 1. 能量
 
 $$
 E(S')=\sum_{i=1}^{n} w_i \sum_{j\in N(i)} w_{ij}\lVert(\mathbf{p}'_i-\mathbf{p}'_j)-\mathbf{R}_i(\mathbf{p}_i-\mathbf{p}_j)\rVert ^2
@@ -25,7 +19,7 @@ $$
 
 ![大旋转下的 ARAP 变形](../../../imgs/knight-arap-large-rotation.gif)
 
-## 2. 局部步：求每个顶点的最优旋转
+## 局部步：求每个顶点的最优旋转
 
 固定所有 $\mathbf{p}'_i$，各 $\mathbf{R}_i$ 相互独立。能量中对 $\mathbf{R}_i$ 有贡献的部分为
 
@@ -40,13 +34,14 @@ $$
 \mathbf{S}_i=\sum_{j\in N(i)} w_{ij}\,(\mathbf{p}_i-\mathbf{p}_j)(\mathbf{p}'_i-\mathbf{p}'_j)^{\mathsf T}.
 $$
 
-最大化 $\operatorname{tr}(\mathbf{R}_i\mathbf{S}_i)$：对 $\mathbf{S}_i=\mathbf{U}_i\Sigma_i\mathbf{V}_i^{\mathsf T}$ 做 SVD，取
+最大化 $\operatorname{tr}(\mathbf{R}_i\mathbf{S}_i)$
 
+对 $\mathbf{S}_i=\mathbf{U}_i\Sigma_i\mathbf{V}_i^{\mathsf T}$ 做 SVD，取
 $$
 \mathbf{R}_i=\mathbf{V}_i\mathbf{U}_i^{\mathsf T}.
 $$
 
-## 3. 全局步：解一个线性系统
+## 全局步：解一个线性系统
 
 固定所有 $\mathbf{R}_i$，令 $\partial E/\partial \mathbf{p}'_i=0$，得逐顶点的 Poisson 方程
 
@@ -56,18 +51,3 @@ $$
 $$
 
 右端只依赖上一步的旋转，视作已知量；左端是标准的 Laplace 结构（余切 Laplacian × 顶点坐标），把三个坐标分量并列即得一个稀疏线性系统。加上手柄约束 $\mathbf{p}'_k=\mathbf{q}_k$ 后解之。
-
-## 4. 迭代与实现
-
-以静止形状初始化 $\mathbf{p}'_i\leftarrow\mathbf{p}_i$，交替执行：
-
-1. **局部步**：对每个顶点做一次 $3\times3$ SVD，得 $\mathbf{R}_i$；
-2. **全局步**：解一次稀疏线性系统，得全部 $\mathbf{p}'_i$。
-
-两步都是精确最小化，故能量单调下降，收敛到局部极小（初值不同可能落到不同解）。全局步的左端矩阵只由 $w_{ij}$ 决定，与旋转、手柄位置无关，可预先 Cholesky 分解，交互时只做回代——这是达到每秒数十帧的关键（`igl::min_quad_with_fixed` 已封装该流程）。
-
-## 5. 局限
-
-1. 与梯度/双调和能量同源，变形在**约束处不光滑**；
-2. **能量值依赖分辨率**：$w_i$ 归一化后，每个顶点的能量是邻域内刚性偏差的加权平均，即 $E(S')$ 相当于这些局部偏差的**采样平均**而非积分；细分加密后同一形变的能量值会变，跨网格比较需再按顶点数或总面积归一化；
-3. 结果受原始网格的**组合结构**偏置，平坦区域亦然。
