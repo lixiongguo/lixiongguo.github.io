@@ -6,6 +6,8 @@ categories: ["Parameterization", "Parameterization-Appendix"]
 mathjax: true
 ---
 
+> **来源**：Boyd & Vandenberghe《Convex Optimization》的对偶理论 + Cortes–Vapnik SVM。乘子 $\alpha_i$（间隔）、$\mu_i$（$\xi_i\ge0$ 的界）、惩罚系数 $C$。
+
 支持向量机 (Support Vector Machine, SVM) 是经典的**二分类**线性判别器：在特征空间中寻找**最大间隔 (maximum margin)** 超平面。其训练问题可写为**凸二次规划 (QP)**；通过 **Lagrange 对偶**得到仅含对偶变量 $\alpha_i$ 的有限维问题，稀疏解对应**支持向量**。对偶 QP 常用 **SMO (Sequential Minimal Optimization)** 等坐标下降法求解——每步只优化两个 $\alpha$，子问题有闭式解。
 
 本篇与《凸优化与KKT条件》《QP与SOCP》衔接：SVM 是约束 QP + 对偶理论 + KKT 互补松弛的标准课堂例；**核技巧**使同一套对偶 QP / SMO 在非线性边界上仍保持凸性与有限维对偶。

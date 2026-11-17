@@ -83,10 +83,12 @@ $$
 | ------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | 问题   | $\min f(\boldsymbol{x})$ s.t. $\boldsymbol{c}(\boldsymbol{x})=\boldsymbol{0}$ | $\min f(\boldsymbol{x})+g(\boldsymbol{x})$，分裂为 $f(\boldsymbol{x})+g(\boldsymbol{z})$，$\boldsymbol{x}=\boldsymbol{z}$ |
 | 变量   | 单块 $\boldsymbol{x}$                                        | $\boldsymbol{x}$、$\boldsymbol{z}$ 各管一项                  |
-| 内层   | $\arg\min_{\boldsymbol{x}} \mathcal{L}_\rho(\boldsymbol{x},\boldsymbol{\lambda}^k)$ | 交替 $\mathrm{prox}_{f/\rho}$、$\mathrm{prox}_{g/\rho}$      |
+| 内层   | 联合 $\arg\min_{\boldsymbol{x}} \mathcal{L}_A(\boldsymbol{x},\boldsymbol{\lambda}^k;\mu)$ | 交替 $\mathrm{prox}_{f/\rho}$、$\mathrm{prox}_{g/\rho}$      |
 | 约束   | 一般非线性 $\boldsymbol{c}$ 可直接处理                        | 耦合为线性（$\boldsymbol{x}-\boldsymbol{z}=\boldsymbol{0}$ 或 $\boldsymbol{D}\boldsymbol{x}=\boldsymbol{z}$） |
 | 子问题 | 常需牛顿 / L-BFGS                                            | $f$、$g$ 结构合适时闭式或快速                                |
 | 对偶侧 | 对偶函数上的**邻近点法**（§与邻近点法、DRS 的关系）          | 对偶函数上的 **DRS**：一个 prox 拆成两个                     |
+
+表中 ALM 一侧用该篇的记号 $\mathcal{L}_A(\cdot,\cdot;\mu)$，本篇的 $\rho$ 与其中的 $\mu$ 是同一个罚参数（$\rho\equiv\mu$），乘子步 $\boldsymbol{\lambda}^{k+1}=\boldsymbol{\lambda}^{k}-\rho(\boldsymbol{x}^{k+1}-\boldsymbol{z}^{k+1})$ 与 $\boldsymbol{\lambda}^{k+1}=\boldsymbol{\lambda}^{k}-\mu\boldsymbol{c}(\boldsymbol{x}^{k+1})$ 形式一致。
 
 二者共享增广拉格朗日与乘子更新；ALM 的两条性质在分裂问题上同样成立：对偶不准时增大 $\rho$ 可驱动 $\boldsymbol{x}-\boldsymbol{z}\to\boldsymbol{0}$；对偶最优且 $\rho$ 足够大时，有限 $\rho$ 下可精确实现 $\boldsymbol{x}=\boldsymbol{z}$。
 
@@ -102,7 +104,7 @@ $$
 \boldsymbol{\lambda}^{k+1}=\arg\max_{\boldsymbol{\lambda}}\Bigl\{\theta(\boldsymbol{\lambda})-\frac{1}{2\rho}\bigl\lVert \boldsymbol{\lambda}-\boldsymbol{\lambda}^{k}\bigr\rVert_2^2\Bigr\},
 $$
 
-即每步不追 $\theta$ 的精确极大点，而追「加上回拉二次项后」的极大点，回拉强度由 $\rho$ 控制——这就是**邻近点法 (proximal point)**。与《有约束优化2》§关键恒等式 (★) 中的 $-\frac{1}{2\rho}\lVert \boldsymbol{\lambda}\rVert_2^2$ 只差正则的对象：那里正则 $\boldsymbol{\lambda}$ 本身（消去后得到罚函数），这里正则 $\boldsymbol{\lambda}-\boldsymbol{\lambda}^{k}$（消去后得到乘子步）。
+即每步不追 $\theta$ 的精确极大点，而追「加上回拉二次项后」的极大点，回拉强度由 $\rho$ 控制——这就是**邻近点法 (proximal point)**。与《有约束优化2》§关键恒等式 (★) 中的 $-\frac{1}{2\mu}\lVert \boldsymbol{\lambda}\rVert_2^2$（该篇的 $\mu$ 即本篇的 $\rho$）只差正则的对象：那里正则 $\boldsymbol{\lambda}$ 本身（消去后得到罚函数），这里正则 $\boldsymbol{\lambda}-\boldsymbol{\lambda}^{k}$（消去后得到乘子步）。
 
 用该篇 §小例 的同一问题验证：$\min\frac12x^2$ s.t. $x-1=0$，$\theta(\lambda)=-\frac12\lambda^2+\lambda$。
 

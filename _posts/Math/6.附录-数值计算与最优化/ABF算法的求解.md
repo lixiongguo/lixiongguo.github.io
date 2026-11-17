@@ -1,3 +1,13 @@
+---
+layout: post
+title: "ABF 算法的数值求解"
+category: Parameterization
+categories: ["Parameterization", "Parameterization-Appendix"]
+mathjax: true
+---
+
+> **来源**：Sheffer & de Sturler (2001) ABF 与 LinABF 的数值解法。三门约束（三角内角和、顶点周角、正弦积）的乘子记 $\lambda_t,\mu_v,\nu_v$。
+
 如果两个三角网格的每对三角形都尽可能相似，那么两个三角网格也可以认为是"相似"的。因此，我们尝试让每个小三角形都尽可能保持相似从而保持整体的形状
 
 <img src="https://lgximgs.oss-cn-beijing.aliyuncs.com/images/image-20260529124336866.png" style="zoom: 67%;" />
