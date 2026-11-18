@@ -6,35 +6,18 @@ categories: ["Parameterization", "Parameterization-Appendix"]
 mathjax: true
 ---
 
-> **记号约定**：本篇按 Nocedal & Wright《Numerical Optimization》(2nd ed.) 第 12 章，处理其中的**对偶**部分；KKT 条件、约束品性与互补松弛见《KKT 条件与约束品性》。约束统一写 $c_i(\boldsymbol{x})$，$i\in\mathcal{E}$ 为等式约束（$c_i=0$），$i\in\mathcal{I}$ 为不等式约束（$c_i\ge0$）；乘子统一用 $\boldsymbol{\lambda}$，非负性只对 $i\in\mathcal{I}$ 要求。《拉格朗日法》《有约束优化2》《交替乘子法 ADMM》沿用同一套记号。
-
-| 记号 | 含义 |
-| :--- | :--- |
-| $\boldsymbol{x}\in\mathbb{R}^n$ | 原变量 |
-| $f(\boldsymbol{x})$ | 目标函数 |
-| $c_i(\boldsymbol{x})$ | 第 $i$ 条约束；$i\in\mathcal{E}$ 取 $c_i=0$，$i\in\mathcal{I}$ 取 $c_i\ge0$ |
-| $\mathcal{A}(\boldsymbol{x})$ | 活动集 $\mathcal{E}\cup\{i\in\mathcal{I}:c_i(\boldsymbol{x})=0\}$ |
-| $\lambda_i$ | 乘子；$\lambda_i\ge0$ 只对 $i\in\mathcal{I}$ 要求，$i\in\mathcal{E}$ 时符号自由 |
-| $\mathcal{L}(\boldsymbol{x},\boldsymbol{\lambda})$ | 拉格朗日函数 $f-\sum_{i\in\mathcal{E}\cup\mathcal{I}}\lambda_ic_i$ |
-| $A(\boldsymbol{x})=\nabla c(\boldsymbol{x})^T$ | 约束 Jacobian，$m\times n$，$m=\lvert\mathcal{E}\rvert+\lvert\mathcal{I}\rvert$ |
-| $p^*,\,d^*$ | 原问题、对偶问题的最优值 |
-
 ## 原问题与 Lagrangian
 
 **原问题**最优值记
 $$
-p^* := \min_{\boldsymbol{x}\in\mathbb{R}^n}\Bigl\{f(\boldsymbol{x})\ :\ c_i(\boldsymbol{x})=0\ (i\in\mathcal{E}),\ c_i(\boldsymbol{x})\ge 0\ (i\in\mathcal{I})\Bigr\}.
+p^* := \min_{\boldsymbol{x}\in\mathbb{R}^n}\Bigl\{f(\boldsymbol{x})\ :\ c_i(\boldsymbol{x})=0\ (i\in\mathcal{E}),\ c_i(\boldsymbol{x})\le 0\ (i\in\mathcal{I})\Bigr\}.
 $$
 
 引入 Lagrange 乘子 $\boldsymbol{\lambda}\in\mathbb{R}^m$（$m=\lvert\mathcal{E}\rvert+\lvert\mathcal{I}\rvert$，仅在 $\mathcal{I}$ 上要求非负），构造 **Lagrangian**
 $$
 \mathcal{L}(\boldsymbol{x},\boldsymbol{\lambda})
-:= f(\boldsymbol{x}) - \sum_{i\in\mathcal{E}\cup\mathcal{I}}\lambda_i\,c_i(\boldsymbol{x}).
+:= f(\boldsymbol{x}) + \sum_{i\in\mathcal{E}\cup\mathcal{I}}\lambda_i\,c_i(\boldsymbol{x}).
 $$
-
-负号是 N&W 的约定：在等式约束上它只是给 $\lambda_i$ 重新定号，不改变结论；在不等式约束上，它配合 $c_i\ge0$ 与 $\lambda_i\ge0$ 才使互补松弛与乘子非负自洽。
-
-对偶理论不先假设 KKT，而是从 Lagrangian 对 $\boldsymbol{x}$ 取下确界出发。
 
 ### 对偶函数与对偶问题
 
@@ -55,8 +38,7 @@ d^* := \max_{\boldsymbol{\lambda}}\;
 \lambda_i\ge 0\ \ (i\in\mathcal{I}).
 $$
 
-**对偶问题恒为凸优化**——无论原问题是否凸。理由如下：固定 $\boldsymbol{x}$ 时，$\mathcal{L}(\boldsymbol{x},\boldsymbol{\lambda})=f(\boldsymbol{x})-\sum_i\lambda_ic_i(\boldsymbol{x})$ 对 $\boldsymbol{\lambda}$ **仿射**（系数为 $-c_i(\boldsymbol{x})$）。对偶函数
-
+**对偶问题恒为凸优化**——无论原问题是否凸。理由如下：固定 $\boldsymbol{x}$ 时，$\mathcal{L}(\boldsymbol{x},\boldsymbol{\lambda})=f(\boldsymbol{x})+\sum_i\lambda_ic_i(\boldsymbol{x})$ 对 $\boldsymbol{\lambda}$ **仿射**（系数为 $-c_i(\boldsymbol{x})$）。对偶函数
 $$
 \theta(\boldsymbol{\lambda})=\inf_{\boldsymbol{x}}\mathcal{L}(\boldsymbol{x},\boldsymbol{\lambda})
 $$
@@ -65,9 +47,8 @@ $$
 
 | | **原问题 (primal)** | **对偶问题 (dual)** |
 |--|---------------------|---------------------|
-| 形式 | $\min f(\boldsymbol{x})$ s.t. $c_i=0\ (i\in\mathcal{E})$、$c_i\ge0\ (i\in\mathcal{I})$ | $\max \theta(\boldsymbol{\lambda})$ s.t. $\lambda_i\ge0\ (i\in\mathcal{I})$ |
-| 凸性 | 一般**非凸**（除非 $f$、$c_i\ (i\in\mathcal{I})$ 凸且 $c_i\ (i\in\mathcal{E})$ 仿射） | **恒凸**（$\theta$ 凹 + 可行域凸） |
-| 难点 | 可行域可能非凸、多局部极小 | $\theta$ 的显式计算常难（内层 $\inf_{\boldsymbol{x}}$ 可能无闭式） |
+| 形式 | $\min f(\boldsymbol{x})$ s.t. $c_i=0\ (i\in\mathcal{E})$、$c_i\le0\ (i\in\mathcal{I})$ | $\max \theta(\boldsymbol{\lambda})$ s.t. $\lambda_i\ge0\ (i\in\mathcal{I})$ |
+| 凸性 | 一般**非凸** | **恒凸** |
 
 因此：原问题非凸时，对偶仍给出**凸**的松弛/下界问题（弱对偶 $d^*\le p^*$），但 $d^*$ 未必等于 $p^*$——间隙大小取决于原问题结构（Slater 等条件保证强对偶）。对偶的凸性不意味着「好算」：求 $\theta(\boldsymbol{\lambda})$ 本身可能需解一个（一般非凸的）内层极小化。
 
@@ -78,7 +59,7 @@ $$
 $$
 \mathcal{L}(\boldsymbol{x},\boldsymbol{\lambda})
 := f(\boldsymbol{x}) - \underbrace{\sum_{i\in\mathcal{E}}\lambda_ic_i(\boldsymbol{x})}_{=0}
-- \underbrace{\sum_{i\in\mathcal{I}}\lambda_ic_i(\boldsymbol{x})}_{\ge 0}
++ \underbrace{\sum_{i\in\mathcal{I}}\lambda_ic_i(\boldsymbol{x})}_{\le 0}
 \;\le\; f(\boldsymbol{x}).
 $$
 
@@ -96,7 +77,21 @@ $$
 \mathrm{gap} := p^* - d^* \;\ge\; 0.
 $$
 
-弱对偶还有一层几何读法：把 Lagrangian 看成双变量函数，$d^*\le p^*$ 就是 minimax 不等式；它与 KKT 充分性共用「鞍点」这一个概念。为了不打断对偶理论的主线，弱对偶一侧的鞍点解释放到文末附录，KKT 一侧的充分性证明则见《KKT 条件与约束品性》附录。
+若 $\mathrm{gap}=0$，即 $p^*=d^*$，称**强对偶 (strong duality)** 成立：原问题与对偶问题最优值一致。此时求解原问题等价于寻找使间隙为零的 $(\boldsymbol{x}^*,\boldsymbol{\lambda}^*)$；
+
+
+
+### Slater 条件
+
+**Slater 条件**：存在可行点 $\boldsymbol{\tilde{x}}$ 使 $c_i(\boldsymbol{\tilde{x}})=0\ (i\in\mathcal{E})$，且 $c_i(\boldsymbol{\tilde{x}})>0\ (i\in\mathcal{I})$（不等式严格成立）。仿射不等式可放宽为 $c_i(\boldsymbol{\tilde{x}})\ge 0$。直观：可行域在不等式意义下有相对内部；椭圆内、多边形内等通常易验证。
+
+凸 + Slater 时，强对偶成立，且 KKT 条件也成为最优性的**充分**条件——那一步的代数形式见《KKT 条件与约束品性》。
+
+
+
+
+
+## 附录：
 
 ### 经济学视角：$d^*$ 是「可证明的最优成本下界」
 
@@ -135,29 +130,11 @@ $$
 
 **与 LP 单纯形法**：最优表最后一行的**检验数**即对偶变量；它们既是 KKT 乘子，也是资源的影子价格——这是 $d^*\le p^*$ 在运筹学里每天被「算出来」的版本。
 
-### 强对偶
 
-若 $\mathrm{gap}=0$，即 $p^*=d^*$，称**强对偶 (strong duality)** 成立：原问题与对偶问题最优值一致。此时求解原问题等价于寻找使间隙为零的 $(\boldsymbol{x}^*,\boldsymbol{\lambda}^*)$；**内点法**与**增广拉格朗日法**可理解为从不同路径逼近这一状态。
 
-强对偶并非恒成立。常见充分条件：
 
-| 条件 | 说明 |
-|------|------|
-| **凸 + Slater** | $f$、$c_i\ (i\in\mathcal{I})$ 凸，$c_i\ (i\in\mathcal{E})$ 仿射，且 Slater 条件成立（定义见下文） |
-| **线性规划** | 若原问题或其对偶之一有有限最优值，则双方最优值相等 |
-| **凸 QP**（$\boldsymbol{H}\succeq 0$） | Slater 的特例 |
 
-整数规划中的 **LP 松弛**给出 $z_{\mathrm{LP}}\le z_{\mathrm{IP}}$，可视为离散问题上的「弱对偶下界」；**整数性间隙**与连续凸优化中的对偶间隙扮演类似角色——衡量松弛有多紧。
-
-### Slater 条件
-
-**Slater 条件**：存在可行点 $\boldsymbol{\tilde{x}}$ 使 $c_i(\boldsymbol{\tilde{x}})=0\ (i\in\mathcal{E})$，且 $c_i(\boldsymbol{\tilde{x}})>0\ (i\in\mathcal{I})$（不等式严格成立）。仿射不等式可放宽为 $c_i(\boldsymbol{\tilde{x}})\ge 0$。直观：可行域在不等式意义下有相对内部；椭圆内、多边形内等通常易验证。
-
-凸 + Slater 时，强对偶成立，且 KKT 条件也成为最优性的**充分**条件——那一步的代数形式见《KKT 条件与约束品性》。
-
----
-
-## 附录：鞍点视角——为何 $d^*\le p^*$
+## 鞍点视角——为何 $d^*\le p^*$
 
 本附录用「鞍点」解释弱对偶，并给出 $d^*\le p^*$ 的代数与几何两种读法。凸问题下 KKT 的充分性由同一套鞍点语言给出，见《KKT 条件与约束品性》附录。
 
