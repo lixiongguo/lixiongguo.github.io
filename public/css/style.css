@@ -150,6 +150,38 @@ code {
 	letter-spacing: 2px;
 }
 
+.sidebar-spotlight {
+	margin: 2px 0 8px;
+	padding: 16px 12px 14px;
+	text-align: center;
+	background: rgba(255, 246, 224, 0.08);
+	border: 1px solid rgba(255, 236, 190, 0.28);
+	border-radius: 14px;
+}
+
+.sidebar-spotlight {
+	margin-top: 18px;
+}
+
+.sidebar-spotlight .quote-card {
+	padding: 0;
+}
+
+.sidebar-spotlight .quote-text {
+	font-size: 1.7em;
+	line-height: 1.45;
+	color: #fff6e0;
+	letter-spacing: 1px;
+	margin: 0;
+}
+
+.sidebar-spotlight .quote-source {
+	font-size: 1.05em;
+	color: #f0d9a0;
+	margin-top: 10px;
+	letter-spacing: 1px;
+}
+
 .tsumego-link {
 	display: flex;
 	flex-direction: row;
@@ -1056,14 +1088,34 @@ footer {
 }
 
 #visitor-stats {
-	color: #888;
-	font-size: 1em;
-	margin-bottom: 4px;
+	display: flex;
+	justify-content: center;
+	gap: 22px;
+	margin: 16px 0 0;
+	color: #f4f4f6;
 }
 
-.stats-sep {
-	margin: 0 4px;
-	opacity: 0.5;
+.stat {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	min-width: 64px;
+}
+
+.stat-num {
+	font-family: "Roboto", sans-serif;
+	font-size: 1.7em;
+	font-weight: 700;
+	line-height: 1.1;
+	color: #fff;
+	font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+	margin-top: 4px;
+	font-size: 0.85em;
+	letter-spacing: 3px;
+	color: #f0d9a0;
 }
 
 
@@ -1083,8 +1135,13 @@ footer {
 	.sidebar {
 		font-size: 0.8em;
 		flex: 0 0 auto;
-		flex-flow: row nowrap;
+		flex-flow: row wrap;
 		height: auto;
+	}
+
+	.sidebar-header,
+	.sidebar-spotlight {
+		flex: 1 1 100%;
 	}
 
 	.sidebar-nav {
@@ -1302,4 +1359,17 @@ footer {
 	.post-nav-next {
 		margin-left: 0;
 	}
+}
+
+/* 侧边栏：算法每日一问入口 */
+.daily-quiz-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: linear-gradient(145deg, #1f2a37, #2c3e50);
+	color: #f0b429;
+	font-family: 'Gelasio', 'Nanum Myeongjo', serif;
+	font-size: 28px;
+	line-height: 1;
+	border: 1px solid #3d5169;
 }

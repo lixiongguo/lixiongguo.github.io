@@ -1,0 +1,628 @@
+---
+layout: page
+title: 算法每日一问
+permalink: /daily/
+---
+
+<div id="daily-app">
+  <div class="dq-hero">
+    <p>题目都从笔记里长出来，考的是推导而不是复述。题面和参考解答是离线数据，答题草稿与打卡记录只存在本机浏览器。</p>
+  </div>
+
+  <div class="dq-top">
+    <section class="dq-card dq-cal">
+      <div class="dq-cal-head">
+        <button type="button" class="dq-nav" id="dq-prev" aria-label="上个月">◀</button>
+        <h3 id="dq-cal-title">—</h3>
+        <button type="button" class="dq-nav" id="dq-next" aria-label="下个月">▶</button>
+      </div>
+      <div class="dq-cal-sum">
+        <span>连续 <strong id="dq-streak">0</strong> 天</span>
+        <span>本月 <strong id="dq-month">0</strong> 天</span>
+        <span>覆盖 <strong id="dq-cover">0</strong> 题</span>
+      </div>
+      <div class="dq-weekdays" aria-hidden="true">
+        <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+      </div>
+      <div class="dq-grid" id="dq-grid"></div>
+      <p class="dq-cal-note"><span class="dq-dot checked"></span>已打卡<span class="dq-dot today"></span>今天</p>
+    </section>
+
+    <section class="dq-card dq-side">
+      <h3>怎么用</h3>
+      <ol class="dq-howto">
+        <li>先自己写推导，想不动再逐条开提示。</li>
+        <li>对照参考解答，只勾选你真正做到的步骤。</li>
+        <li>提交后当天记为一次打卡，草稿留在这里不会丢。</li>
+      </ol>
+      <p class="dq-tip">题目是自评的：数学推导没有唯一写法，勾选评分点比给自己打分更诚实。</p>
+      <div class="dq-actions">
+        <button type="button" id="dq-export" class="dq-btn dq-btn-ghost">导出记录</button>
+        <button type="button" id="dq-import" class="dq-btn dq-btn-ghost">导入记录</button>
+        <input type="file" id="dq-file" accept="application/json" hidden>
+      </div>
+      <div class="dq-total" id="dq-total"></div>
+    </section>
+  </div>
+
+  <section class="dq-card dq-today">
+    <div class="dq-section-head">
+      <h3>今日一题</h3>
+      <button type="button" id="dq-shuffle" class="dq-btn">换一题</button>
+    </div>
+    <div id="dq-today-body" class="dq-empty">正在加载题库…</div>
+  </section>
+
+  <section class="dq-card">
+    <div class="dq-section-head">
+      <h3>全部题目</h3>
+      <span class="dq-count" id="dq-count"></span>
+    </div>
+    <div id="dq-list" class="dq-empty">正在加载题库…</div>
+  </section>
+</div>
+
+<style>
+  #daily-app { --dq-line: #e4e9f0; --dq-ink: #2c3e50; --dq-dim: #7b8794; --dq-accent: #2c7be5; }
+  #daily-app { color: var(--dq-ink); }
+  .dq-hero h2 { margin: 0 0 6px; font-size: 1.7em; }
+  .dq-hero p { margin: 0 0 20px; color: var(--dq-dim); font-size: 14.5px; line-height: 1.7; }
+
+  .dq-card {
+    background: #fff;
+    border: 1px solid var(--dq-line);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 2px rgba(44, 62, 80, .04);
+  }
+  .dq-top { display: grid; grid-template-columns: minmax(280px, 340px) 1fr; gap: 18px; }
+  .dq-card h3 { margin: 0; font-size: 15.5px; font-weight: 600; }
+
+  .dq-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .dq-nav {
+    border: 1px solid var(--dq-line); background: #fff; color: var(--dq-dim);
+    width: 26px; height: 26px; border-radius: 6px; cursor: pointer; font-size: 11px; line-height: 1;
+  }
+  .dq-nav:hover { color: var(--dq-accent); border-color: #bcd3f5; }
+  .dq-cal-sum { display: flex; gap: 14px; font-size: 12.5px; color: var(--dq-dim); margin-bottom: 10px; }
+  .dq-cal-sum strong { color: var(--dq-ink); font-size: 14px; }
+  .dq-weekdays, .dq-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .dq-weekdays span { text-align: center; font-size: 11.5px; color: var(--dq-dim); padding-bottom: 2px; }
+  .dq-cell {
+    aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; border-radius: 5px; color: #93a1b0; background: #f7f9fc; border: 1px solid transparent;
+  }
+  .dq-cell.empty { background: transparent; }
+  .dq-cell.checked { background: #dcecff; color: #1b5bb5; font-weight: 600; }
+  .dq-cell.today { border-color: var(--dq-accent); }
+  .dq-cell.future { color: #c9d2dc; background: #fbfcfe; }
+  .dq-cal-note { margin: 10px 0 0; font-size: 11.5px; color: var(--dq-dim); }
+  .dq-dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin: 0 4px 0 10px; }
+  .dq-dot:first-child { margin-left: 0; }
+  .dq-dot.checked { background: #dcecff; border: 1px solid #9dc4f0; }
+  .dq-dot.today { border: 1px solid var(--dq-accent); }
+
+  .dq-howto { margin: 10px 0 12px; padding-left: 18px; font-size: 13.5px; line-height: 1.85; color: #4a5a6a; }
+  .dq-tip { margin: 0 0 12px; font-size: 12.5px; color: var(--dq-dim); line-height: 1.7; }
+  .dq-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .dq-total { margin-top: 12px; font-size: 12.5px; color: var(--dq-dim); }
+
+  .dq-btn {
+    border: 1px solid var(--dq-accent); background: var(--dq-accent); color: #fff;
+    border-radius: 6px; padding: 5px 13px; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  .dq-btn:hover { background: #1d68c9; }
+  .dq-btn-ghost { background: #fff; color: #35506b; border-color: #ccd8e6; }
+  .dq-btn-ghost:hover { background: #f3f7fc; border-color: #a9c2de; }
+  .dq-btn:disabled { opacity: .5; cursor: default; }
+
+  .dq-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .dq-count { font-size: 12.5px; color: var(--dq-dim); }
+  .dq-empty { color: var(--dq-dim); font-size: 13.5px; padding: 8px 0; }
+
+  .dq-item { border-top: 1px solid #eef2f7; padding: 16px 0 6px; }
+  .dq-item:first-child { border-top: 0; padding-top: 4px; }
+  .dq-item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .dq-badge { font-size: 11.5px; padding: 1px 7px; border-radius: 10px; border: 1px solid; }
+  .dq-badge.lv-推导 { color: #2c7be5; border-color: #c3daf7; background: #f2f8ff; }
+  .dq-badge.lv-进阶 { color: #b5751b; border-color: #f0dcbb; background: #fff9ee; }
+  .dq-badge.lv-挑战 { color: #c0392b; border-color: #f2c9c4; background: #fff4f2; }
+  .dq-tag { font-size: 12px; color: var(--dq-dim); }
+  .dq-src { font-size: 12px; color: var(--dq-dim); margin-left: auto; }
+  .dq-src a { color: #88a2bd; border-bottom: 1px dashed #c9d6e4; }
+  .dq-src a:hover { color: var(--dq-accent); text-decoration: none; }
+
+  .dq-prompt { font-size: 14.5px; line-height: 1.9; color: #34495e; white-space: pre-wrap; }
+  .dq-prompt p { margin: 6px 0; }
+
+  .dq-tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+  .dq-mini {
+    border: 1px solid #d8e3ef; background: #f8fbfe; color: #4a6a8a;
+    border-radius: 6px; padding: 4px 11px; font-size: 12.5px; cursor: pointer; font-family: inherit;
+  }
+  .dq-mini:hover { border-color: #a9c2de; color: var(--dq-accent); }
+  .dq-hint { margin: 6px 0 0; padding: 8px 12px; background: #f8fafc; border-left: 3px solid #cfe0f2;
+    font-size: 13px; color: #4a5a6a; line-height: 1.8; white-space: pre-wrap; }
+
+  .dq-answer {
+    width: 100%; min-height: 96px; margin: 10px 0 0; padding: 10px 12px;
+    border: 1px solid #dbe4ee; border-radius: 8px; font-family: inherit; font-size: 14px;
+    line-height: 1.8; color: #2c3e50; resize: vertical; background: #fcfdff;
+  }
+  .dq-answer:focus { outline: none; border-color: #a9c2de; background: #fff; }
+
+  .dq-solution { margin: 12px 0 0; padding: 12px 14px; background: #fbfcfe; border: 1px dashed #d3dfec; border-radius: 8px; }
+  .dq-solution h4 { margin: 0 0 8px; font-size: 13px; color: #35506b; }
+  .dq-solution ol { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.9; color: #3d5165; }
+  .dq-solution li { white-space: pre-wrap; margin-bottom: 6px; }
+  .dq-mistake { margin: 10px 0 0; font-size: 12.5px; color: #a2563f; line-height: 1.75; }
+
+  .dq-rubric { margin: 12px 0 0; }
+  .dq-rubric label { display: flex; gap: 8px; align-items: flex-start; font-size: 13px;
+    line-height: 1.7; color: #3d5165; padding: 4px 0; cursor: pointer; }
+  .dq-rubric input { margin-top: 5px; accent-color: var(--dq-accent); }
+  .dq-rubric .w { color: #9aa8b6; font-size: 11.5px; margin-left: 4px; }
+
+  .dq-submit-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .dq-score { font-size: 13px; color: #35506b; }
+
+  .dq-group { margin-bottom: 10px; }
+  .dq-group > summary {
+    cursor: pointer; font-size: 14px; color: #35506b; padding: 9px 0;
+    border-bottom: 1px solid #eef2f7; list-style: none;
+  }
+  .dq-group > summary::-webkit-details-marker { display: none; }
+  .dq-group > summary::before { content: "▸ "; color: #a9bccf; }
+  .dq-group[open] > summary::before { content: "▾ "; }
+
+  .dq-toast {
+    position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%);
+    background: #2c3e50; color: #fff; padding: 9px 18px; border-radius: 8px;
+    font-size: 13px; z-index: 999; opacity: 0; transition: opacity .2s;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+  }
+  .dq-toast.show { opacity: 1; }
+
+  @media (max-width: 860px) {
+    .dq-top { grid-template-columns: 1fr; }
+    .dq-src { margin-left: 0; }
+  }
+</style>
+
+<script>
+(function () {
+  var QUIZ_BASE = "/assets/quiz/";
+  var LS_DAYS = "dq:v1:days";
+  var LS_BEST = "dq:v1:best";
+  var LS_DRAFT = "dq:v1:draft:";
+
+  var POST_URLS = {
+    {% for p in site.posts %}{{ p.path | jsonify }}: {{ p.url | relative_url | jsonify }}{% unless forloop.last %},{% endunless %}{% endfor %}
+  };
+
+  var state = { quizzes: [], flat: [], todayId: null, calYear: 0, calMonth: 0 };
+
+  function readJSON(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key) || "null") || fallback; }
+    catch (e) { return fallback; }
+  }
+  function writeJSON(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { }
+  }
+  function dayKey(d) {
+    d = d || new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function toast(msg) {
+    var t = document.getElementById("dq-toast");
+    if (!t) {
+      t = document.createElement("div");
+      t.id = "dq-toast";
+      t.className = "dq-toast";
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function postUrl(file) {
+    for (var k in POST_URLS) {
+      if (k.split("/").pop() === file) return POST_URLS[k];
+    }
+    return null;
+  }
+
+  function whenMathJax() {
+    return new Promise(function (resolve) {
+      var tries = 0;
+      (function poll() {
+        if (window.MathJax && window.MathJax.typesetPromise) return resolve(window.MathJax);
+        if (++tries > 100) return resolve(null);
+        setTimeout(poll, 100);
+      })();
+    });
+  }
+  function typeset(nodes) {
+    return whenMathJax().then(function (mj) {
+      if (!mj) return;
+      var list = [].concat(nodes).filter(Boolean);
+      if (!list.length) return;
+      return mj.typesetPromise(list).catch(function () { });
+    });
+  }
+
+  function loadData() {
+    return fetch(QUIZ_BASE + "index.json", { cache: "no-cache" })
+      .then(function (r) { return r.json(); })
+      .then(function (idx) {
+        return Promise.all((idx.quizzes || []).map(function (q) {
+          return fetch(QUIZ_BASE + q.file, { cache: "no-cache" })
+            .then(function (r) { return r.json(); })
+            .then(function (data) { return { meta: q, data: data }; })
+            .catch(function () { return null; });
+        }));
+      })
+      .then(function (list) {
+        state.quizzes = list.filter(Boolean);
+        state.flat = [];
+        state.quizzes.forEach(function (q) {
+          (q.data.items || []).forEach(function (item) {
+            state.flat.push({ item: item, quiz: q.data, meta: q.meta });
+          });
+        });
+        state.flat.forEach(function (e) {
+          e.item.total = (e.item.rubric || []).reduce(function (s, r) { return s + (r.weight || 0); }, 0);
+        });
+      });
+  }
+
+  function buildItem(entry) {
+    var item = entry.item;
+    var wrap = document.createElement("div");
+    wrap.className = "dq-item";
+    wrap.dataset.id = item.id;
+
+    var url = postUrl(entry.quiz.post);
+    var head = document.createElement("div");
+    head.className = "dq-item-head";
+    head.innerHTML =
+      '<span class="dq-badge lv-' + esc(item.level) + '">' + esc(item.level) + "</span>" +
+      '<span class="dq-tag">' + esc(item.tag || "") + "</span>" +
+      '<span class="dq-src">' + (url
+        ? '出自 <a href="' + url + '">《' + esc(entry.quiz.title) + "》</a>"
+        : "出自《" + esc(entry.quiz.title) + "》") +
+      "</span>";
+    wrap.appendChild(head);
+
+    var prompt = document.createElement("div");
+    prompt.className = "dq-prompt";
+    prompt.innerHTML = fenced(item.prompt);
+    wrap.appendChild(prompt);
+
+    var tools = document.createElement("div");
+    tools.className = "dq-tools";
+    var hintBtn = document.createElement("button");
+    hintBtn.type = "button";
+    hintBtn.className = "dq-mini";
+    hintBtn.textContent = "提示";
+    var solBtn = document.createElement("button");
+    solBtn.type = "button";
+    solBtn.className = "dq-mini";
+    solBtn.textContent = "参考解答";
+    tools.appendChild(hintBtn);
+    tools.appendChild(solBtn);
+    wrap.appendChild(tools);
+
+    var hintBox = document.createElement("div");
+    wrap.appendChild(hintBox);
+
+    var area = document.createElement("textarea");
+    area.className = "dq-answer";
+    area.placeholder = "在这里写推导（草稿会自动保存，只在这台机器上）";
+    area.value = localStorage.getItem(LS_DRAFT + item.id) || "";
+    wrap.appendChild(area);
+    var saveTimer = null;
+    area.addEventListener("input", function () {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function () {
+        try { localStorage.setItem(LS_DRAFT + item.id, area.value); } catch (e) { }
+      }, 400);
+    });
+
+    var solBox = document.createElement("div");
+    wrap.appendChild(solBox);
+
+    var rubric = document.createElement("div");
+    rubric.className = "dq-rubric";
+    (item.rubric || []).forEach(function (r, i) {
+      var label = document.createElement("label");
+      label.innerHTML = '<input type="checkbox" data-w="' + (r.weight || 0) + '" data-i="' + i + '">' +
+        "<span>" + fenced(r.point) + '<span class="w">+' + (r.weight || 0) + "</span></span>";
+      rubric.appendChild(label);
+    });
+    wrap.appendChild(rubric);
+
+    var row = document.createElement("div");
+    row.className = "dq-submit-row";
+    var submit = document.createElement("button");
+    submit.type = "button";
+    submit.className = "dq-btn";
+    submit.textContent = "提交打卡";
+    var score = document.createElement("span");
+    score.className = "dq-score";
+    row.appendChild(submit);
+    row.appendChild(score);
+    wrap.appendChild(row);
+
+    var hintShown = 0;
+    hintBtn.addEventListener("click", function () {
+      var hints = item.hints || [];
+      if (hintShown >= hints.length) { toast("没有更多提示了"); return; }
+      var p = document.createElement("div");
+      p.className = "dq-hint";
+      p.innerHTML = "提示 " + (hintShown + 1) + "：" + fenced(hints[hintShown]);
+      hintBox.appendChild(p);
+      hintShown++;
+      hintBtn.textContent = hintShown >= hints.length ? "提示已用完" : "提示 (" + (hints.length - hintShown) + " 条)";
+      typeset([p]);
+    });
+    hintBtn.textContent = "提示 (" + (item.hints || []).length + ")";
+
+    var solOpen = false;
+    solBtn.addEventListener("click", function () {
+      solOpen = !solOpen;
+      if (!solOpen) { solBox.innerHTML = ""; solBtn.textContent = "参考解答"; return; }
+      var box = document.createElement("div");
+      box.className = "dq-solution";
+      var html = "<h4>参考推导</h4><ol>";
+      (item.solution || []).forEach(function (s) { html += "<li>" + fenced(s) + "</li>"; });
+      html += "</ol>";
+      if (item.mistake) html += '<p class="dq-mistake">' + fenced(item.mistake) + "</p>";
+      box.innerHTML = html;
+      solBox.appendChild(box);
+      solBtn.textContent = "收起解答";
+      typeset([box]);
+    });
+
+    submit.addEventListener("click", function () {
+      var boxes = rubric.querySelectorAll('input[type="checkbox"]');
+      var got = 0, any = false;
+      boxes.forEach(function (b) { if (b.checked) { got += Number(b.dataset.w); any = true; } });
+      if (!any) { toast("先勾选你真正做到的步骤"); return; }
+      var total = item.total || 0;
+      var days = readJSON(LS_DAYS, {});
+      var key = dayKey();
+      if (!days[key]) days[key] = { items: [], score: 0, total: 0 };
+      if (days[key].items.indexOf(item.id) < 0) days[key].items.push(item.id);
+      days[key].score += got;
+      days[key].total += total;
+      writeJSON(LS_DAYS, days);
+
+      var best = readJSON(LS_BEST, {});
+      var ratio = total ? got / total : 0;
+      if (!best[item.id] || ratio >= best[item.id].ratio) {
+        best[item.id] = { ratio: ratio, got: got, total: total, at: key };
+      }
+      best[item.id].attempts = (best[item.id].attempts || 1) + 1;
+      writeJSON(LS_BEST, best);
+
+      score.textContent = "本次 " + got + "/" + total + " · 已打卡";
+      renderCalendar();
+      renderTotals();
+      toast("已记录：" + got + "/" + total);
+    });
+
+    var best = readJSON(LS_BEST, {});
+    if (best[item.id]) {
+      score.textContent = "最好 " + best[item.id].got + "/" + best[item.id].total;
+    }
+
+    return wrap;
+  }
+
+  // $...$ / $$...$$ 原样交给 MathJax；这里只做轻量的 **粗体** 与段落规整。
+  function fenced(text) {
+    return String(text || "")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .split(/\n{2,}/)
+      .map(function (p) { return p.trim(); })
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  function renderToday() {
+    var body = document.getElementById("dq-today-body");
+    body.innerHTML = "";
+    body.classList.remove("dq-empty");
+    if (!state.flat.length) { body.textContent = "题库为空。"; return; }
+    var idx = 0;
+    if (state.todayId) {
+      idx = Math.max(0, state.flat.findIndex(function (e) { return e.item.id === state.todayId; }));
+    }
+    var entry = state.flat[idx];
+    body.appendChild(buildItem(entry));
+    typeset([body]);
+  }
+
+  function renderList() {
+    var list = document.getElementById("dq-list");
+    list.innerHTML = "";
+    list.classList.remove("dq-empty");
+    if (!state.flat.length) { list.textContent = "题库为空。"; return; }
+    document.getElementById("dq-count").textContent = state.flat.length + " 题 · " + state.quizzes.length + " 篇笔记";
+
+    var nodes = [];
+    state.quizzes.forEach(function (q) {
+      var details = document.createElement("details");
+      details.className = "dq-group";
+      var sum = document.createElement("summary");
+      sum.textContent = q.data.title + "（" + q.meta.category + " · " + (q.data.items || []).length + " 题）";
+      details.appendChild(sum);
+      (q.data.items || []).forEach(function (item) {
+        details.appendChild(buildItem({ item: item, quiz: q.data, meta: q.meta }));
+      });
+      list.appendChild(details);
+      nodes.push(details);
+    });
+    typeset(nodes);
+  }
+
+  function renderCalendar() {
+    var days = readJSON(LS_DAYS, {});
+    var grid = document.getElementById("dq-grid");
+    var title = document.getElementById("dq-cal-title");
+    grid.innerHTML = "";
+    title.textContent = state.calYear + " 年 " + (state.calMonth + 1) + " 月";
+
+    var first = new Date(state.calYear, state.calMonth, 1);
+    var daysInMonth = new Date(state.calYear, state.calMonth + 1, 0).getDate();
+    var startPad = first.getDay() - 1;
+    if (startPad < 0) startPad = 6;
+
+    var todayKey = dayKey();
+    var monthCount = 0;
+
+    for (var i = 0; i < startPad; i++) {
+      var pad = document.createElement("span");
+      pad.className = "dq-cell empty";
+      grid.appendChild(pad);
+    }
+    for (var d = 1; d <= daysInMonth; d++) {
+      var key = state.calYear + "-" + String(state.calMonth + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+      var cell = document.createElement("span");
+      cell.className = "dq-cell";
+      cell.textContent = String(d);
+      var rec = days[key];
+      if (rec && rec.items && rec.items.length) {
+        cell.classList.add("checked");
+        cell.title = rec.items.length + " 题 · " + rec.score + "/" + rec.total;
+        monthCount++;
+      }
+      if (key === todayKey) cell.classList.add("today");
+      if (key > todayKey) cell.classList.add("future");
+      grid.appendChild(cell);
+    }
+
+    document.getElementById("dq-month").textContent = monthCount;
+
+    // 连续天数：从今天（或昨天）往前数
+    var streak = 0;
+    var cursor = new Date();
+    if (!days[dayKey(cursor)]) cursor.setDate(cursor.getDate() - 1);
+    while (days[dayKey(cursor)] && days[dayKey(cursor)].items.length) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    document.getElementById("dq-streak").textContent = streak;
+  }
+
+  function renderTotals() {
+    var best = readJSON(LS_BEST, {});
+    var covered = Object.keys(best).filter(function (k) { return best[k].ratio > 0; }).length;
+    document.getElementById("dq-cover").textContent = covered;
+
+    var days = readJSON(LS_DAYS, {});
+    var totalDays = Object.keys(days).length;
+    var totalScore = 0, totalFull = 0;
+    Object.keys(days).forEach(function (k) { totalScore += days[k].score || 0; totalFull += days[k].total || 0; });
+    document.getElementById("dq-total").textContent =
+      totalDays ? "累计打卡 " + totalDays + " 天 · 累计得分 " + totalScore + "/" + totalFull +
+        " · 已覆盖 " + covered + "/" + state.flat.length + " 题" : "";
+  }
+
+  function pickToday() {
+    var today = dayKey();
+    var hash = 0;
+    for (var i = 0; i < today.length; i++) hash = (hash * 31 + today.charCodeAt(i)) >>> 0;
+    state.todayId = state.flat[hash % state.flat.length].item.id;
+  }
+
+  function exportData() {
+    var payload = {
+      exported: new Date().toISOString(),
+      days: readJSON(LS_DAYS, {}),
+      best: readJSON(LS_BEST, {})
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 1)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "daily-quiz-" + dayKey() + ".json";
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  function importData(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var data = JSON.parse(reader.result);
+        if (data.days) writeJSON(LS_DAYS, data.days);
+        if (data.best) writeJSON(LS_BEST, data.best);
+        renderCalendar();
+        renderTotals();
+        toast("记录已导入");
+      } catch (e) {
+        toast("文件格式不对");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function init() {
+    var now = new Date();
+    state.calYear = now.getFullYear();
+    state.calMonth = now.getMonth();
+
+    document.getElementById("dq-prev").addEventListener("click", function () {
+      state.calMonth--;
+      if (state.calMonth < 0) { state.calMonth = 11; state.calYear--; }
+      renderCalendar();
+    });
+    document.getElementById("dq-next").addEventListener("click", function () {
+      state.calMonth++;
+      if (state.calMonth > 11) { state.calMonth = 0; state.calYear++; }
+      renderCalendar();
+    });
+    document.getElementById("dq-shuffle").addEventListener("click", function () {
+      if (!state.flat.length) return;
+      var i = Math.floor(Math.random() * state.flat.length);
+      state.todayId = state.flat[i].item.id;
+      renderToday();
+    });
+    document.getElementById("dq-export").addEventListener("click", exportData);
+    document.getElementById("dq-import").addEventListener("click", function () {
+      document.getElementById("dq-file").click();
+    });
+    document.getElementById("dq-file").addEventListener("change", function (e) {
+      if (e.target.files && e.target.files[0]) importData(e.target.files[0]);
+    });
+
+    renderCalendar();
+    loadData().then(function () {
+      if (!state.flat.length) {
+        document.getElementById("dq-today-body").textContent = "题库为空。";
+        document.getElementById("dq-list").textContent = "题库为空。";
+        return;
+      }
+      pickToday();
+      renderToday();
+      renderList();
+      renderTotals();
+    }).catch(function (err) {
+      document.getElementById("dq-today-body").textContent = "题库加载失败：" + err;
+      document.getElementById("dq-list").textContent = "题库加载失败。";
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+</script>

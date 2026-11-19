@@ -1,0 +1,12 @@
+{
+ "updated": "2026-11-19",
+ "quizzes": [
+  {
+   "file": "brenier-ma.json",
+   "title": "二次代价与Brenier定理",
+   "post": "2019-06-01-Brenier定理与MA方程.md",
+   "category": "最优传输",
+   "count": 4
+  }
+ ]
+}

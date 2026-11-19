@@ -20,6 +20,15 @@
 			<span class="quick-link-title">技术美术</span>
 		</a>
 	</div>
+	<div class="quick-link-card">
+		<a class="quick-link" href="/daily/" aria-label="进入算法每日一问">
+			<span class="quick-link-icon daily-quiz-icon" aria-hidden="true">∑</span>
+			<div class="quick-link-text">
+				<span class="quick-link-title">算法每日一问</span>
+				<span class="quick-link-subtitle">从笔记里出的推导题</span>
+			</div>
+		</a>
+	</div>
 	<div class="quick-link-card tsumego-pending">
 		<span class="dev-ribbon">未开发完</span>
 		<a class="quick-link" href="/tsumego/" aria-label="进入每日死活题（开发中）">
@@ -117,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var quotes = {{ site.data.quotes | jsonify }};
   if (Array.isArray(quotes) && quotes.length > 0) {
     var q = quotes[Math.floor(Math.random() * quotes.length)];
-    var card = document.querySelector('.sidebar-footer .quote-card');
+    var card = document.querySelector('.sidebar-spotlight .quote-card');
     if (card) {
       if (q.text) {
         var t = card.querySelector('.quote-text');
@@ -139,34 +148,6 @@ document.addEventListener('DOMContentLoaded', function () {
 			<li><a class="nav-item algo-link-with-icon" href="https://weixin.sogou.com/weixin?type=1&query=老顾谈几何" target="_blank" rel="noopener"><span class="algo-mini-icon" aria-hidden="true"></span>老顾谈几何</a></li>
 	</ul>
 </div> -->
-
-<!-- 算法测试: 静态链接 + 图形学 Demo -->
-<div class="sidebar-item sidebar-nav algo-section">
-  	<ul class="nav">
-			<li class="nav-title">⚙️ 算法测试</li>
-
-			{% for demo in site.data.algo_demos %}
-			<li class="{% unless demo.ready %}algo-demo-not-ready{% endunless %}">
-				{% if demo.ready or jekyll.environment != "production" %}
-				<a class="nav-item algo-link-with-icon{% unless demo.ready %} algo-demo-disabled{% endunless %}"
-				   href="{{ demo.url | relative_url }}"
-				   target="_blank"
-				   rel="noopener"
-				   {% unless demo.ready %}title="开发中（本地可预览）" aria-disabled="true"{% endunless %}>
-					<span class="algo-mini-icon" aria-hidden="true"></span>{{ demo.title }}
-				</a>
-				{% else %}
-				<span class="nav-item algo-link-with-icon algo-demo-disabled" title="开发中，尚未开放">
-					<span class="algo-mini-icon" aria-hidden="true"></span>{{ demo.title }}
-				</span>
-				{% endif %}
-			</li>
-			{% endfor %}
-			<!-- <li><a class="nav-item algo-link-with-icon" href="/vector-field.html" target="_blank" rel="noopener"><span class="algo-mini-icon" aria-hidden="true"></span>向量场生成</a></li> -->
-
-	  </nav>
-	</ul>
-</div>
 
 <!-- 机器学习 - 文章目录树 -->
 <div class="sidebar-item sidebar-nav">
@@ -211,6 +192,23 @@ document.addEventListener('DOMContentLoaded', function () {
     {% endfor %}
   </ul>
   {% endif %}
+</div>
+
+<div class="sidebar-spotlight">
+	<div class="project-card quote-card">
+		<p class="quote-text">"志不强者智不达，言不信者行不果。"</p>
+		<p class="quote-source">——《墨子·修身》</p>
+	</div>
+	<p id="visitor-stats">
+		<span class="stat">
+			<span class="stat-num" id="busuanzi_value_site_uv">—</span>
+			<span class="stat-label">访客</span>
+		</span>
+		<span class="stat">
+			<span class="stat-num" id="busuanzi_value_site_pv">—</span>
+			<span class="stat-label">访问</span>
+		</span>
+	</p>
 </div>
 
 <!-- 
@@ -317,14 +315,5 @@ document.addEventListener('DOMContentLoaded', function () {
 	</div>
 </div> -->
 <div class="sidebar-item sidebar-footer">
-	<div class="project-card quote-card">
-		<p class="quote-text">"志不强者智不达，言不信者行不果。"</p>
-		<p class="quote-source">——《墨子·修身》</p>
-	</div>
-	<p id="visitor-stats">
-		<span>访客 <span id="busuanzi_value_site_uv"></span></span>
-		<span class="stats-sep">·</span>
-		<span>访问 <span id="busuanzi_value_site_pv"></span></span>
-	</p>
 	<p>Powered by <a href="https://github.com/jekyll/jekyll">Jekyll</a></p>
 </div>

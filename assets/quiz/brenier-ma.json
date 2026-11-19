@@ -1,0 +1,152 @@
+{
+ "post": "2019-06-01-Brenier定理与MA方程.md",
+ "title": "二次代价与Brenier定理",
+ "category": "最优传输",
+ "generated": "2026-11-19",
+ "items": [
+  {
+   "id": "brenier-01",
+   "level": "推导",
+   "tag": "Brenier 结构",
+   "prompt": "设代价 $c(x,y)=\\frac{1}{2}\\lVert x-y\\rVert^2$，$(\\phi_K,\\psi_K)$ 是 Kantorovich 对偶问题的一对最优势。只允许使用对偶取等条件 $\\phi_K(x)+\\psi_K(T(x))=c(x,T(x))$ 和 $\\nabla_y\\big[c(x,y)-\\psi_K(y)\\big]\\big|_{y=T(x)}=0$，推出\n$$\\nabla_x\\phi_K(x)=x-T(x),$$\n并说明为什么 $T$ 一定是某个凸函数的梯度。",
+   "hints": [
+    "先对 $y\\mapsto c(x,y)-\\psi_K(y)$ 求梯度，把 $T(x)$ 解出来。",
+    "再把 $T(x)$ 代回取等条件，对 $x$ 求全导数（注意 $T(x)$ 也依赖 $x$）。",
+    "要证明 $T=\nabla\\phi$，把 $\\phi(x)=\\phi_K(x)+\frac{1}{2}\\lVert x\rVert^2$ 代进去看它是否凸。"
+   ],
+   "solution": [
+    "对 $y$ 求梯度：$\\nabla_y c(x,y)=y-x$，故 $y-x-\\nabla\\psi_K(y)=0$，即 $T(x)=x+\\nabla\\psi_K(T(x))$。",
+    "对 $x$ 求全导数：$\\nabla\\phi_K(x)+D\\psi_K(T(x))\\,DT(x)=x-T(x)+DT(x)^\\top\\nabla\\psi_K(T(x))$。由前一步 $\\nabla\\psi_K(T(x))=T(x)-x$，代入后得 $\\nabla\\phi_K(x)=x-T(x)$。",
+    "令 $\\phi(x)=\\phi_K(x)+\\frac12\\lVert x\\rVert^2$，则 $\\nabla\\phi=x+\\nabla\\phi_K=T$。$\\phi$ 是凸函数（这正是对偶有效性给出的结构），故 $T$ 是凸函数的梯度。",
+    "反过来，凸函数梯度映射是单调的（$(\\nabla\\phi(x)-\\nabla\\phi(x'))\\cdot(x-x')\\ge0$），这正是二次代价下最优映射的循环单调性。"
+   ],
+   "rubric": [
+    {
+     "point": "对 $y$ 求梯度得到 $T(x)=x+\\nabla\\psi_K(T(x))$",
+     "weight": 1
+    },
+    {
+     "point": "对取等条件求全导数并解出 $\\nabla\\phi_K=x-T(x)$",
+     "weight": 2
+    },
+    {
+     "point": "构造 $\\phi=\\phi_K+\\frac12\\lVert x\\rVert^2$ 并验证 $\\nabla\\phi=T$",
+     "weight": 2
+    },
+    {
+     "point": "指出 $\\phi$ 凸 ⇒ $T$ 单调（循环单调性的来源）",
+     "weight": 1
+    }
+   ],
+   "mistake": "常见错误：对 $x$ 求导时漏掉 $T(x)$ 的雅可比项，或直接把 $\\psi_K$ 当成常量——那会得出 $\\nabla\\phi_K=x$，即 $T\\equiv0$。"
+  },
+  {
+   "id": "brenier-02",
+   "level": "推导",
+   "tag": "Monge–Ampère",
+   "prompt": "从推前条件 $T_{\\#}\\mu=\\nu$ 出发，其中 $T=\\nabla\\phi$、$\\phi$ 凸，且 $\\mu,\\nu$ 都有密度。证明密度满足\n$$\\nu(\\nabla\\phi(x))\\cdot\\det\\!\\big(D^2\\phi(x)\\big)=\\mu(x),$$\n并说明：若去掉「$\\phi$ 凸」这个条件，这个式子会在哪里失效。",
+   "hints": [
+    "先写测度的变量替换：对任意可测集 $A$，$\\mu(T^{-1}(A))=\\nu(A)$。",
+    "把 $A$ 收缩成以 $T(x)$ 为中心的小块，用一阶展开估计原像的体积缩放。",
+    "体积缩放的因子是 $|\\det DT(x)|$，而 $DT=D^2\\phi$ 是对称矩阵。"
+   ],
+   "solution": [
+    "对任意可测集 $A$：$\\nu(A)=\\mu(T^{-1}(A))=\\int_{T^{-1}(A)}\\mu(x)\\,dx$。",
+    "在 $A$ 上做变量替换 $y=T(x)$：$dy=|\\det DT(x)|\\,dx$，故 $\\mu(x)=\\nu(T(x))\\,|\\det DT(x)|$。",
+    "又 $DT(x)=D^2\\phi(x)$ 对称，$\\det$ 的绝对值等于 $\\det$。若 $\\phi$ 凸，则 $D^2\\phi\\succeq0$，于是 $\\det D^2\\phi\\ge0$，绝对值可以去掉，得到 $\\nu(\\nabla\\phi)\\,\\det D^2\\phi=\\mu$。",
+    "若 $\\phi$ 不凸：$\\det D^2\\phi$ 可能为负或为零，变量替换公式只能写 $|\\det|$；同时 $\\nabla\\phi$ 可能不是单射，原像不唯一，密度关系不再是逐点的。这正是 Brenier 定理要求 $\\phi$ 凸的原因。"
+   ],
+   "rubric": [
+    {
+     "point": "写出推前条件的积分形式",
+     "weight": 1
+    },
+    {
+     "point": "使用变量替换，指出缩放因子是 $|\\det DT|$",
+     "weight": 2
+    },
+    {
+     "point": "识别 $DT=D^2\\phi$ 并对对称矩阵化掉绝对值",
+     "weight": 2
+    },
+    {
+     "point": "说明非凸时 $\\det$ 可能变号、$\\nabla\\phi$ 非单射",
+     "weight": 2
+    }
+   ],
+   "mistake": "常见错误：直接把 $\\det D^2\\phi=1$，或写 $\\mu(\\nabla\\phi^{-1}(y))$ 时忘了雅可比——那是把「保测度」误当成「保体积」。"
+  },
+  {
+   "id": "brenier-03",
+   "level": "进阶",
+   "tag": "扭曲条件",
+   "prompt": "扭曲条件要求 $y\\mapsto\\nabla_x c(x,y)$ 对每个固定的 $x$ 是单射。\n(1) 验证 $c(x,y)=\\frac12\\lVert x-y\\rVert^2$ 满足该条件；\n(2) 举出一个**不满足**扭曲条件的代价函数，并说明此时「最优映射唯一」为什么会失效。",
+   "hints": [
+    "(1) 直接算 $\\nabla_x c$ 对 $y$ 的依赖。",
+    "(2) 试一个只依赖距离的代价，比如 $c(x,y)=\\lVert x-y\\rVert$，考察 $y\\mapsto\\nabla_x c$ 在 $y=x$ 附近的行为。",
+    "也可以考虑 $c(x,y)=\\varphi(\\langle x,y\\rangle)$ 且 $\\varphi$ 非严格凹的情形。"
+   ],
+   "solution": [
+    "(1) $\\nabla_x c(x,y)=x-y$，对固定 $x$，映射 $y\\mapsto x-y$ 是仿射双射，故严格满足扭曲条件。",
+    "(2) $c(x,y)=\\lVert x-y\\rVert$：当 $y\\ne x$ 时 $\\nabla_x c=(x-y)/\\lVert x-y\\rVert$ 只依赖方向，模长恒为 1；在 $y=x$ 处次微分是整个单位球。因此 $y\\mapsto\\nabla_x c$ 不单射，同一个 $\\nabla_x c$ 值可能对应多个 $y$。",
+    "后果：一阶条件 $\\nabla_x c(x,y)=\\nabla\\phi(x)$ 只能确定一个集合（$c$-上微分 $\\partial^c\\psi(x)$），最优计划允许把一个 $x$ 分裂到多个 $y$ 上，映射 $T$ 不再存在或不再唯一。",
+    "对比：二次代价严格凸且 $\\nabla_x c$ 关于 $y$ 可逆，所以「对偶取等」逐点给出唯一的 $T(x)$——这就是 Brenier 定理与一般代价下只能得到 Kantorovich 计划的区别。"
+   ],
+   "rubric": [
+    {
+     "point": "算出 $\\nabla_x c=x-y$ 并说明它是双射",
+     "weight": 1
+    },
+    {
+     "point": "给出一个合理的不满足扭曲条件的代价",
+     "weight": 2
+    },
+    {
+     "point": "指出此时 $c$-上微分多值 ⇒ 映射不唯一（可能分裂质量）",
+     "weight": 2
+    },
+    {
+     "point": "对比说明二次代价为何能保证唯一性",
+     "weight": 1
+    }
+   ],
+   "mistake": "常见错误：只验证 $\\nabla_x c$ 存在就宣称满足扭曲条件；单射性才是关键，不是可微性。"
+  },
+  {
+   "id": "brenier-04",
+   "level": "挑战",
+   "tag": "对偶平移",
+   "prompt": "笔记里写「$\\tilde\\phi=\\phi-\\frac12\\lVert x\\rVert^2$、$\\tilde\\psi=\\phi^*-\\frac12\\lVert y\\rVert^2$ 与 $\\phi+\\psi\\le c$ 的约定差一个 $\\frac12\\lVert x\\rVert^2+\\frac12\\lVert y\\rVert^2$ 的平移」。请把这句话变成精确命题：\n(1) 证明在最优对上 $\\tilde\\phi(x)+\\tilde\\psi(y)=-\\langle x,y\\rangle$；\n(2) 说明这个「平移」为什么不是加常数，而是加一个二次函数；\n(3) 说明 $\\tilde\\phi$ 一般不是凸函数，而对偶问题仍然有效的原因。",
+   "hints": [
+    "(1) 用 $c$ 的展开式，以及 Fenchel 等式 $\\phi(x)+\\phi^*(y)=\\langle x,y\\rangle$ 在 $y\\in\\partial\\phi(x)$ 时成立。",
+    "(2) 比较两个函数在 $x$ 与 $y$ 上分别减去的项。",
+    "(3) 凸函数减去 $\\frac12\\lVert x\\rVert^2$：取 $\\phi=\\frac12\\lVert x\\rVert^2$ 试试，再取 $\\phi=2\\lVert x\\rVert$ 试试。"
+   ],
+   "solution": [
+    "(1) $c(x,y)=\\frac12\\lVert x\\rVert^2-\\langle x,y\\rangle+\\frac12\\lVert y\\rVert^2$。取 $y\\in\\partial\\phi(x)$，即 $\\phi(x)+\\phi^*(y)=\\langle x,y\\rangle$，则 $\\tilde\\phi+\\tilde\\psi=\\langle x,y\\rangle-\\frac12\\lVert x\\rVert^2-\\frac12\\lVert y\\rVert^2=-\\langle x,y\\rangle$，与 $c$ 相差的就是那两个二次项。",
+    "(2) 常数平移对两个势同时加上会互相抵消，不改变任何最优性条件；而这里 $x$ 侧与 $y$ 侧减去的是**不同的**二次函数，等价于把代价函数本身从 $\\frac12\\lVert x-y\\rVert^2$ 换成 $-\\langle x,y\\rangle$。这是同一对偶问题的另一种规范化。",
+    "(3) $\\phi$ 凸不蕴含 $\\phi-\\frac12\\lVert x\\rVert^2$ 凸：取 $\\phi=\\frac12\\lVert x\\rVert^2$ 时 $\\tilde\\phi\\equiv0$，仍是凸的；但取 $\\phi=2\\lVert x\\rVert$，$\\tilde\\phi$ 在远离原点处曲率为负，不再凸。",
+    "(4) 对偶问题真正需要的是 $-\\tilde\\phi$ 的凸性（等价于 $\\tilde\\phi$ 凹）与约束 $\\tilde\\phi+\\tilde\\psi\\le-\\langle x,y\\rangle$ 相容，这个凹性由 $\\phi$ 凸保证。此外 $\\phi$ 加任意常数不改变 $\\nabla\\phi=T$，所以势只在相差常数意义下唯一。"
+   ],
+   "rubric": [
+    {
+     "point": "展开 $c$ 并用 Fenchel 等式得到 $-\\langle x,y\\rangle$",
+     "weight": 2
+    },
+    {
+     "point": "说明两侧减去的二次函数不同 ⇒ 等价于更换代价",
+     "weight": 2
+    },
+    {
+     "point": "举出 $\\tilde\\phi$ 非凸的具体例子",
+     "weight": 2
+    },
+    {
+     "point": "指出势的常数自由度不影响 $T$",
+     "weight": 1
+    }
+   ],
+   "mistake": "常见错误：把「平移」理解成 $\\phi$ 与 $\\psi$ 同时加常数；那样对 $\\nabla\\phi$ 毫无影响，也就解释不了为什么最终公式变成 $T=x+\\nabla\\phi_K$。"
+  }
+ ]
+}
