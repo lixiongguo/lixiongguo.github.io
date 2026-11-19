@@ -27,6 +27,7 @@ exclude:
   - cpp/
   - docs/cpp/
   - electron/
+  - Tools/
   - "gallery/*.md"
 plugins:
   - jekyll-feed
