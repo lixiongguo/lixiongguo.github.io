@@ -6,13 +6,15 @@ mathjax: true
 ---
 
 > 主线：**SMPL**（可微人体模板）→ **SMPLify**（2D 关键优化拟合）→ **HMR**（神经网络直接回归，替代逐图优化）→ 着装扩展：**ClothCap**（4D 扫描分割跟踪）→ **IPNet**（扫描/点云 → 双层隐式 + SMPL+D 配准）→ **Octopus**（图/短视频 → SMPL+顶点位移）→ **Multi-GarmentNet / BCNet**（身体与衣物分层）。  
-> 隐式着装人体见 [PIFu 等](几何深度学习-隐式表达.md)；显式网格分析 / TightCap 见 [显式表达](几何深度学习-显示表达.md)；ClothCap 的 MRF 分割见 [MRF 应用 2](../../2.Machine%20Learning/1.机器学习与模式识别/MRF应用2-ClothCap.md)。
+> 隐式着装人体见 [PIFu 等](几何深度学习-隐式表达.md)；显式网格分析 / TightCap 见 [显式表达](几何深度学习-显示表达.md)；ClothCap 的 MRF 分割已移至 [基于机器学习的单帧三维重建](基于机器学习的单帧三维重建.md)。
 
 ---
 
 ## SMPL
 
 > Loper et al., *SMPL: A Skinned Multi-Person Linear Model*, SIGGRAPH Asia 2015.
+
+![smpl+D](../../../imgs/smpl+D.png)
 
 ### 在表达什么
 
@@ -115,33 +117,14 @@ $$
 | 先验 | 显式能量项 | 数据驱动 + 对抗 |
 | 输入 | 常依赖 2D 关节 | 可直接吃图像特征 |
 
-实践中也常见：**HMR 初始化 → 少量 SMPLify 精修**。后续 **SPIN**（Kolotouros et al.）把「回归 ↔ 优化」在训练环里拧得更紧；**SMPL-X + SMPLify-X** 把手脸一并拟合。记口诀：**SMPLify = 优化拟合；HMR = 学会拟合**。
-
----
-
-## ClothCap
-
-> Pons-Moll, Pujades, Hu, Black, *ClothCap: Seamless 4D Clothing Capture and Retargeting*, SIGGRAPH 2017.
-
-### 设定
-
-输入是着装人的 **4D 扫描**（高分辨率网格序列，约 60 fps），不是单张 RGB。目标：把**多件衣服彼此分开、与身体分开**，跟踪布料形变，并**重定向**到新体型（虚拟试穿方向）。
-
-### 做法要点
-
-1. 先用（贴身）**SMPL** 对齐扫描，估计衣服下的身体姿态/体型；  
-2. **MRF** 等在扫描上做部件分割（上装 / 下装 / 身体等），结合形状与外观；  
-3. **多 mesh 模板**分别贴合各服装层，建立跨时间对应；  
-4. 导出服装几何与运动，迁移到新的 SMPL 身体上。
-
-相对「单层 SMPL+位移」：ClothCap 强调**分层服装资产**来自真实动态捕获。贵在采集设备与配准；是后来学习式衣物数据集（如 MGN 数据管线）的重要前序思想。
-
----
+实践中也常见：**HMR 初始化 → 少量 SMPLify 精修**。后续 **SPIN**（Kolotouros et al.）把「回归 ↔ 优化」在训练环里拧得更紧；**SMPL-X + SMPLify-X** 把手脸一并拟合。记口诀：**SMPLify = 优化拟合；HMR = 学会拟合**
 
 ## IPNet：扫描 / 点云上的 SMPL 配准
 
 > Bhatnagar et al., *Combining Implicit Function Learning and Parametric Models for 3D Human Reconstruction*（**IP-Net / IPNet**）, ECCV 2020.  
 > 项目页：[virtualhumans.mpi-inf.mpg.de/ipnet](https://virtualhumans.mpi-inf.mpg.de/ipnet/) · 代码常与 MPI / RVH 网格配准工具链对照使用。
+
+![屏幕截图12](../../../imgs/屏幕截图12-1795079134512-16.png)
 
 ### 要解决什么问题
 
@@ -259,30 +242,7 @@ $$
 
 ---
 
-## BCNet
 
-> Jiang et al., *BCNet: Learning Body and Cloth Shape from A Single Image*, ECCV 2020.
-
-### 想法
-
-**单张 RGB**（不必多视分割管线）同时估身体与服装。服装不绑死在 SMPL 顶点子集上：
-
-- 每类衣有**独立 mesh + PCA 尺寸空间**（T-pose 下低维 \(\alpha\)）；  
-- 与 SMPL **共享姿态 \(\theta\)**，但用网络预测服装自己的**蒙皮权重** \(W_g\)；  
-- 再加位移 \(D\) 刻画穿着形变。
-
-这样拓扑可比「SMPL 裁一块当衣服」更自由，对裙等宽松品类更友好。
-
-### 和 MGN / Octopus 对比
-
-| | Octopus | MGN | BCNet |
-| :--- | :--- | :--- | :--- |
-| 输入 | 单目 1–8 帧分割 | 多视分割+关节 | **单张 RGB** |
-| 衣物表示 | SMPL 上位移 | 分层衣模板+位移 | 独立衣模板+学蒙皮 |
-| 换装 | 弱（粘连） | 强 | 强（品类内） |
-| 宽松衣 | 一般 | 中等 | 相对更好 |
-
----
 
 ## 脉络小结
 
@@ -329,6 +289,10 @@ HMR（2018）图像 → 网络直接回归 β,θ   ←「代替优化」
 
 高精人体有SMPL参数化表达，但是人体细节太多SMPL表达力不够。
 难点：衣物本身薄壳结构难以MVS重建，复杂形态，动态褶皱，样式众多
+
+
+
+
 
 ## 其他参考
 
