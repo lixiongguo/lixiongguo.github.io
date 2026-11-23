@@ -40,25 +40,11 @@
   detail_url: "/gallery/boid.html"
   ready: false
 
-- slug: bezier-editor
-  title: Bézier 曲线编辑器
-  description: 类 PS 钢笔工具：拖拽创建三次 Bézier 曲线，Ctrl 移动锚点，Alt 断开平滑手柄，右键删除。
-  thumbnail: /assets/gallery/bezier-editor.png
-  detail_url: "/gallery/bezier-editor.html"
-  ready: true
-
 - slug: ik-spider
   title: IK 蜘蛛
   description: CCD 逆运动学驱动 Spider Tank 的六条腿。三足步态生成足端目标，WASD 移动，可显示 IK 链并调节迭代次数。
   thumbnail: /assets/gallery/ik-spider.png
   detail_url: "/gallery/ik-spider.html"
-  ready: true
-
-- slug: neural-ot
-  title: Neural Lagrangian OT
-  description: 神经拉格朗日最优传输可视化：粒子沿时变速度场从源分布推送到目标分布，可切换三峰/圆环/双月形目标。
-  thumbnail: /assets/gallery/neural-ot.svg
-  detail_url: "/gallery/neural-ot.html"
   ready: true
 
 - slug: water-2d
@@ -87,20 +73,6 @@
   description: Stable Fluids 二维欧拉网格：半拉格朗日平流、压力投影与染料示踪，拖拽搅动水体，可显示速度场。
   thumbnail: /assets/gallery/water-euler.svg
   detail_url: "/gallery/water-euler.html"
-  ready: false
-
-- slug: gaussian-splat
-  title: 3D Gaussian Splatting
-  description: 3DGS 高斯溅射渲染：加载中式居家住宅 SPZ 模型，数百万高斯椭球体实时渲染，自由旋转观察。
-  thumbnail: /assets/gallery/gaussian-splat.png
-  detail_url: "/gallery/gaussian-splat.html"
-  ready: false
-
-- slug: gaussian-splat-ply
-  title: 3DGS PLY 远程加载
-  description: 从阿里云 OSS CDN 加载 330MB 中式居家住宅 PLY 模型，1.46M 高斯椭球体实时渲染，支持球谐光照。
-  thumbnail: /assets/gallery/gaussian-splat.png
-  detail_url: "/gallery/gaussian-splat-ply.html"
   ready: false
 
 - slug: little-tokyo
