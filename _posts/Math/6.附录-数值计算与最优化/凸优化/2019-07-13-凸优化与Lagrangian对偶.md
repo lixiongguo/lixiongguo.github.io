@@ -77,18 +77,13 @@ $$
 \mathrm{gap} := p^* - d^* \;\ge\; 0.
 $$
 
-若 $\mathrm{gap}=0$，即 $p^*=d^*$，称**强对偶 (strong duality)** 成立：原问题与对偶问题最优值一致。此时求解原问题等价于寻找使间隙为零的 $(\boldsymbol{x}^*,\boldsymbol{\lambda}^*)$；
-
-
+若 $\mathrm{gap}=0$，即 $p^*=d^*$，称**强对偶 (strong duality)** 成立：原问题与对偶问题最优值一致。此时求解原问题等价于寻找使间隙为零的 $(\boldsymbol{x}^*,\boldsymbol{\lambda}^*)$。
 
 ### Slater 条件
 
 **Slater 条件**：存在可行点 $\boldsymbol{\tilde{x}}$ 使 $c_i(\boldsymbol{\tilde{x}})=0\ (i\in\mathcal{E})$，且 $c_i(\boldsymbol{\tilde{x}})>0\ (i\in\mathcal{I})$（不等式严格成立）。仿射不等式可放宽为 $c_i(\boldsymbol{\tilde{x}})\ge 0$。直观：可行域在不等式意义下有相对内部；椭圆内、多边形内等通常易验证。
 
-凸 + Slater 时，强对偶成立，且 KKT 条件也成为最优性的**充分**条件——那一步的代数形式见《KKT 条件与约束品性》。
-
-
-
+凸 + Slater 时，强对偶成立，且 KKT 条件也成为最优性的**充分**条件。
 
 
 ## 附录：
@@ -115,7 +110,7 @@ d^* = \max_{\lambda_i\ge 0}
 \underbrace{\inf_{\boldsymbol{x}}\bigl(f(\boldsymbol{x})-\sum_i\lambda_ic_i(\boldsymbol{x})\bigr)}_{\text{给定价格后，生产者的最优反应}}.
 $$
 
-- **$\lambda_i$**：第 $i$ 条约束的**影子价格 (shadow price)**——约束每放松一单位，最优成本可下降多少（见后文互补松弛）；
+- **$\lambda_i$**：第 $i$ 条约束的**影子价格 (shadow price)**——约束每放松一单位，最优成本可下降多少；
 - **$\theta(\boldsymbol{\lambda})$**：在价格 $\boldsymbol{\lambda}$ 下，生产者按 $\min_{\boldsymbol{x}}\mathcal{L}$ 反应后的**最低广义成本**；
 - **$d^*$**：所有合理定价 $\lambda_i\ge 0$ 中，这个下界的**最大值**。
 
@@ -126,17 +121,13 @@ $$
 - 若 $d^*<p^*$：**对偶间隙**表示「仅靠线性惩罚无法完全替代硬约束」——惩罚定价再精明，生产者的最优反应仍比真约束下更乐观，下界偏松。
 - 若 $d^*=p^*$（强对偶）：存在价格 $\boldsymbol{\lambda}^*$，使「软约束 + 该定价」与「硬约束」给出相同最优值；$\lambda_i^*$ 即约束 $i$ 的**边际价值**——紧约束处 $\lambda_i^*>0$，松弛约束处 $\lambda_i^*=0$（多一单位资源已不值钱）。
 
-**小例子（单资源）**：$\min x$ s.t. $x\ge 2$，写成 N&W 形式即 $c(x)=x-2\ge0$。真约束下 $p^*=2$。若用惩罚代替约束，$\mathcal{L}=x-\lambda(x-2)=(1-\lambda)x+2\lambda$：$\lambda\ne 1$ 时生产者可沿下降方向取 $x\to\pm\infty$ 使 $\mathcal{L}\to -\infty$，$\lambda= 1$ 时 $\mathcal{L}\equiv 2$。故 $d^*=\max_{\lambda\ge 0}\inf_x \mathcal{L}=2=p^*$：价格 $\lambda^*=1$ 恰为「每多生产一单位 $x$ 所增加的边际成本」，与约束的边际价值一致。
+**小例子（单资源）**：$\min x$ s.t. $x\ge 2$，即 $c(x)=x-2\ge0$。真约束下 $p^*=2$。若用惩罚代替约束，$\mathcal{L}=x-\lambda(x-2)=(1-\lambda)x+2\lambda$：$\lambda\ne 1$ 时生产者可沿下降方向取 $x\to\pm\infty$ 使 $\mathcal{L}\to -\infty$，$\lambda= 1$ 时 $\mathcal{L}\equiv 2$。故 $d^*=\max_{\lambda\ge 0}\inf_x \mathcal{L}=2=p^*$：价格 $\lambda^*=1$ 恰为「每多生产一单位 $x$ 所增加的边际成本」，与约束的边际价值一致。
 
 **与 LP 单纯形法**：最优表最后一行的**检验数**即对偶变量；它们既是 KKT 乘子，也是资源的影子价格——这是 $d^*\le p^*$ 在运筹学里每天被「算出来」的版本。
 
-
-
-
-
 ## 鞍点视角——为何 $d^*\le p^*$
 
-本附录用「鞍点」解释弱对偶，并给出 $d^*\le p^*$ 的代数与几何两种读法。凸问题下 KKT 的充分性由同一套鞍点语言给出，见《KKT 条件与约束品性》附录。
+用「鞍点」解释弱对偶，并给出 $d^*\le p^*$ 的代数与几何两种读法。
 
 把 Lagrangian 看成 $\boldsymbol{x}$ 与 $\boldsymbol{\lambda}$ 的**双变量函数**。原问题与对偶问题可写成两个**极值–极值**问题：
 
