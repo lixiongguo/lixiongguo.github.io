@@ -10,7 +10,7 @@ mathjax: true
 
 支持向量机 (Support Vector Machine, SVM) 是经典的**二分类**线性判别器：在特征空间中寻找**最大间隔 (maximum margin)** 超平面。其训练问题可写为**凸二次规划 (QP)**；通过 **Lagrange 对偶**得到仅含对偶变量 $\alpha_i$ 的有限维问题，稀疏解对应**支持向量**。对偶 QP 常用 **SMO (Sequential Minimal Optimization)** 等坐标下降法求解——每步只优化两个 $\alpha$，子问题有闭式解。
 
-本篇与《凸优化与 Lagrangian 对偶》《KKT 条件与约束品性》《QP与SOCP》衔接：SVM 是约束 QP + 对偶理论 + KKT 互补松弛的标准课堂例；**核技巧**使同一套对偶 QP / SMO 在非线性边界上仍保持凸性与有限维对偶。
+本篇与《凸优化与 Lagrangian 对偶》《KKT 条件与约束品性》《有约束优化3-1-凸QP与SOCP》衔接：SVM 是约束 QP + 对偶理论 + KKT 互补松弛的标准课堂例；**核技巧**使同一套对偶 QP / SMO 在非线性边界上仍保持凸性与有限维对偶。
 
 ---
 
@@ -602,7 +602,7 @@ $\boldsymbol{x}_1=(0,0),y_1=+1$；$\boldsymbol{x}_2=(2,0),y_2=-1$。线性可分
 | :--- | :--- |
 | 《凸优化与 Lagrangian 对偶》 | Lagrangian 构造、对偶函数、弱/强对偶、鞍点 |
 | 《KKT 条件与约束品性》 | KKT 四条件、LICQ、互补松弛、影子价格 |
-| 《QP与SOCP》 | (P-soft) 为凸 QP；内点法 / 活动集法可替代 SMO |
+| 《有约束优化3-1-凸QP与SOCP》 | (P-soft) 为凸 QP；内点法 / 活动集法可替代 SMO |
 | 《线性规划》 | 无约束方向上的对偶间隙、活跃集直觉 |
 | 《凸优化问题举例》 | 硬间隔 SVM 对偶；核化后 $d\to\infty$ 时对偶仍 $m$ 维 |
 | MILP | 非凸扩展（特征选择整数）不在本篇 |

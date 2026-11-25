@@ -6,7 +6,7 @@ categories: ["Parameterization", "Parameterization-Appendix"]
 mathjax: true
 ---
 
-**凸共轭**（Fenchel 共轭）与它的特例 **Legendre 变换**，以及由它导出的 Fenchel 对偶、Moreau 分解与包络恒等式，是下面要处理的对象。
+**凸共轭**（Fenchel 共轭）与它的特例 **Legendre 变换**，以及由它导出的 Fenchel 对偶、Moreau 分解与包络恒等式，是近端算法与对偶算法的公共语言。本文只讲这些工具本身：§1–§5 不依赖算法背景，§6 会用到近端算子 $\operatorname{prox}$ 的定义，其算法用法见《近端优化：近端算子、Moreau 分解与 FISTA》。
 
 ## 1. 定义
 
@@ -250,3 +250,7 @@ $$
 $$
 
 两式相同，故 $1/\mu$ 同时是回拉系数与邻近项系数。
+
+---
+
+这些对偶工具在复合优化中的直接后果——近端算子的运算规则、ISTA/FISTA 的收敛率、以及对偶间隙作为可验证的停止判据——见《近端优化：近端算子、Moreau 分解与 FISTA》§2–§4。
