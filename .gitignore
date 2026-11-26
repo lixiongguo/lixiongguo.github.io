@@ -47,3 +47,5 @@ cpp/emsdk/
 CPUPathTracing/build/
 CPUPathTracing/Models/
 AccessKey.csv
+
+**.pdf
